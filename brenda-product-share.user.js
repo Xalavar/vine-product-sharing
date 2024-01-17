@@ -1,5 +1,5 @@
 // ==UserScript==
-// @name         Vine Discord Poster (Publish to Github)
+// @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
 // @version      1.0
 // @description  A tool to make posting to Discord easier
