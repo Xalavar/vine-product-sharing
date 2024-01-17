@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.0
+// @version      1.1
 // @description  A tool to make posting to Discord easier
 // @author       Discord: lelouch_di_britannia
 // @match        https://www.amazon.com/vine/vine-items
