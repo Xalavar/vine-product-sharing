@@ -1,13 +1,21 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.1
+// @version      1.2
 // @description  A tool to make posting to Discord easier
 // @author       Discord: lelouch_di_britannia
 // @match        https://www.amazon.com/vine/vine-items
 // @match        https://www.amazon.com/vine/vine-items?queue=potluck*
 // @match        https://www.amazon.com/vine/vine-items?queue=last_chance*
 // @match        https://www.amazon.com/vine/vine-items?queue=encore*
+// @match        https://www.amazon.co.uk/vine/vine-items
+// @match        https://www.amazon.co.uk/vine/vine-items?queue=potluck*
+// @match        https://www.amazon.co.uk/vine/vine-items?queue=last_chance*
+// @match        https://www.amazon.co.uk/vine/vine-items?queue=encore*
+// @match        https://www.amazon.ca/vine/vine-items
+// @match        https://www.amazon.ca/vine/vine-items?queue=potluck*
+// @match        https://www.amazon.ca/vine/vine-items?queue=last_chance*
+// @match        https://www.amazon.ca/vine/vine-items?queue=encore*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
 // @updateURL    https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
 // @downloadURL  https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
