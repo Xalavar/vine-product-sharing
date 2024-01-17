@@ -30,7 +30,7 @@ NOTES:
 
     /* ^ EVERYTHING NORMAL USERS NEED IS ABOVE HERE ^ */
 
-    const urlData = window.location.href.match(/(amazon..+)\/vine\/vine-items\?queue=(encore|last_chance|potluck).*$/); // Country and queue type are extrapolated from this
+    const urlData = window.location.href.match(/(amazon..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
 
     // The individual icons for the Share button
     const btn_discordSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -15 130 130" style="height: 25px;width: 26px;margin-right: 4px;">
