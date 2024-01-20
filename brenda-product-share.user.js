@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.3.3
+// @version      1.3.4
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items
@@ -138,7 +138,7 @@ NOTES:
         var str = (Object.keys(variations).length > 1) ? '<:dropdown_options:1117467480860922018> Dropdowns' : '<:dropdown_options:1117467480860922018> Dropdown';
         for (const type in variations) {
             const t = (variations[type].length > 1) ? `${type}s` : `${type}`; // plural, if multiple
-            str += `\n\n***${t}:*** ${variations[type].join('; ')}`;
+            str += `\n**${t}:** ${variations[type].join('; ')}`;
         }
 
         return str;
@@ -149,7 +149,8 @@ NOTES:
         (productData.isLimited) ? comment.push("<:limited_ltd:1117538207362457611> Limited") : null;
         (productData.variations) ? comment.push(variationFormatting(productData.variations)) : null;
 
-        comment = comment.join('\n\n');
+        comment = comment.join('\n');
+        comment = comment?.replace("\n", "\n\n"); // A fix for the weird formatting issue where the 1st line break requires 2 newlines instead of 1
 
         if (comment.length > 900) {
             const index = comment.lastIndexOf(' ');
