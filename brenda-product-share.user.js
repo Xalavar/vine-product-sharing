@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.3.4
+// @version      1.4
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items
@@ -32,7 +32,7 @@ NOTES:
 
     var API_TOKEN = GM_getValue("apiToken");
 
-    // Removes old products if they've been in local storage for 90+ days
+    // Removes old products if they've been in stored for 90+ days
     function purgeOldItems() {
         const items = GM_getValue("config");
         const date = new Date().getTime();
@@ -59,6 +59,7 @@ NOTES:
     }
 
     addGlobalStyle(`.a-button-discord-icon { background-image: url(https://m.media-amazon.com/images/S/sash/ZNt8quAxIfEMMky.png); content: ""; padding: 10px 10px 10px 10px; background-size: 512px 512px; background-repeat: no-repeat; margin-right: 5px; vertical-align: middle; }`)
+    addGlobalStyle(`.a-button-discord.mobile-vertical { margin-top: 7px; margin-left: 0px; }`)
 
     const urlData = window.location.href.match(/(amazon..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
 
@@ -161,13 +162,107 @@ NOTES:
         return comment;
     }
 
-    function addShareButton() {
-        var discordBtn = `<button class="a-button-discord" aria-label="Post to Discord" style="align-items: center; height: 31px;"></button>`;
-        var btnHeader = document.querySelector('.vvp-modal-footer');
-        btnHeader.insertAdjacentHTML('afterbegin', discordBtn);
+    // Triggers when the Discord button is clicked
+    async function buttonHandler() {
+
+        // Prepping data to be sent to the API
+        var productData = {};
+        var childAsin = document.querySelector("a#vvp-product-details-modal--product-title").href.match(/amazon..+\/dp\/([A-Z0-9]+).*$/)[1];
+        var variations = returnVariations();
+        productData.variations = (Object.keys(variations).length > 0) ? variations : null;
+        productData.isLimited = (document.querySelector('#vvp-product-details-modal--limited-quantity').style.display !== 'none') ? true : false;
+        productData.asin = parentAsin;
+        productData.differentChild = (parentAsin !== childAsin) ? true : false; // comparing the asin loaded in the modal to the one on the webpage
+        productData.etv = document.querySelector("#vvp-product-details-modal--tax-value-string")?.innerText.replace("$", "");
+        productData.queue = queueType;
+        productData.comments = writeComment(productData);
+        // possibly more things to come...
+
+        const response = await sendDataToAPI(productData);
+
+        var listOfItems = GM_getValue('config');
+
+        if (response) {
+            // deal with the API response
+            if (response.status == 200) { // successfully posted to Discord
+                listOfItems[productData.asin] = {};
+                listOfItems[productData.asin].status = 'Posted';
+                listOfItems[productData.asin].queue = productData.queue;
+                listOfItems[productData.asin].date = new Date().getTime();
+                GM_setValue('config', listOfItems);
+                updateButtonIcon(2);
+            } else if (response.status == 400 || response.status == 401) { // invalid token
+                updateButtonIcon(5);
+                // Will prompt the user to enter a valid token
+                askForToken("missing/invalid").then((value) => {
+                    API_TOKEN = value;
+                    buttonHandler(); // retry the API request
+                }).catch((error) => {
+                    console.error(error);
+                });
+            } else if (response.status == 422) { // incorrect parameters (API might have been updated) or posting is paused
+                updateButtonIcon(6);
+            } else if (response.status == 429) { // too many requests
+                updateButtonIcon(3);
+            }
+        }
+
     }
 
-    function updateButton(type) {
+    let productDetailsModal;
+
+    // Update position of the button
+    function updateButtonPosition() {
+        const button = document.querySelector('.a-button-discord');
+        const container = productDetailsModal;
+
+        // check the size of the modal first before determining where the button goes
+        if (container.offsetWidth < container.offsetHeight) {
+            // the See Details modal is taller, so moving it toward the bottom
+            button.classList.add('mobile-vertical');
+            button.parentElement.appendChild(button);
+        } else {
+            // revert to the original button placement
+            button.classList.remove('mobile-vertical');
+            button.parentElement.prepend(button);
+        }
+
+        button.removeElement; // remove the old button
+        button.addEventListener("click", buttonHandler);
+    }
+
+    // Distinguishes the correct modal since Amazon doesn't distinguish them at all
+    function getCorrectModal() {
+        var btnHeaders = document.querySelectorAll('.vvp-modal-footer');
+        var filteredHeaders = Array.from(btnHeaders).map(function (modal) {
+            var productDetailsHeader = modal.parentElement.parentElement.querySelector('.a-popover-header > .a-popover-header-content');
+            if (productDetailsHeader && productDetailsHeader.innerText.trim() === 'Product Details') {
+                return [modal, modal.parentElement.parentElement];
+            }
+            return null;
+        });
+
+        filteredHeaders = filteredHeaders.filter(function (item) {
+            return item !== null;
+        });
+
+        return filteredHeaders[0];
+    }
+
+    // Initialize the button
+    function addShareButton() {
+        var discordBtn = `<button class="a-button-discord" aria-label="Post to Discord" style="align-items: center; height: 31px;"></button>`;
+        var modalElems = getCorrectModal(); // ensuring the button gets added to the correct modal
+        modalElems[0].insertAdjacentHTML('afterbegin', discordBtn);
+        productDetailsModal = modalElems[1];
+
+        // Add observer to check if the modal gets resized
+        const resizeObserver = new ResizeObserver(updateButtonPosition);
+        resizeObserver.observe(productDetailsModal);
+
+    }
+
+    function updateButtonIcon(type) {
         var discordBtn = document.querySelector('.a-button-discord');
         if (type == 0) { // default
             discordBtn.innerHTML = `${btn_discordSvg} Share on Discord`;
@@ -212,7 +307,7 @@ NOTES:
             comment: data.comments,
         });
 
-        updateButton(1);
+        updateButtonIcon(1);
 
         return new Promise((resolve, reject) => {
             GM_xmlhttpRequest({
@@ -228,7 +323,7 @@ NOTES:
                 },
                 onerror: function(error) {
                     console.error(error);
-                    updateButton(6);
+                    updateButtonIcon(6);
                     reject(error);
                 },
             });
@@ -270,7 +365,6 @@ NOTES:
         });
     });
 
-
     window.addEventListener('load', function () {
         var target, observer, config;
 
@@ -282,52 +376,6 @@ NOTES:
             childList: false,
             subtree: false
         };
-
-        // Triggers when the Discord button is clicked
-        async function buttonHandler() {
-
-            // Prepping data to be sent to the API
-            var productData = {};
-            var childAsin = document.querySelector("a#vvp-product-details-modal--product-title").href.match(/amazon..+\/dp\/([A-Z0-9]+).*$/)[1];
-            var variations = returnVariations();
-            productData.variations = (Object.keys(variations).length > 0) ? variations : null;
-            productData.isLimited = (document.querySelector('#vvp-product-details-modal--limited-quantity').style.display !== 'none') ? true : false;
-            productData.asin = parentAsin;
-            productData.differentChild = (parentAsin !== childAsin) ? true : false; // comparing the asin loaded in the modal to the one on the webpage
-            productData.etv = document.querySelector("#vvp-product-details-modal--tax-value-string")?.innerText.replace("$", "");
-            productData.queue = queueType;
-            productData.comments = writeComment(productData);
-            // add in some other things to do...
-
-            const response = await sendDataToAPI(productData);
-
-            var listOfItems = GM_getValue('config');
-
-            if (response) {
-                if (response.status == 200) { // successfully posted to Discord
-                    listOfItems[productData.asin] = {};
-                    listOfItems[productData.asin].status = 'Posted';
-                    listOfItems[productData.asin].queue = productData.queue;
-                    listOfItems[productData.asin].date = new Date().getTime();
-                    GM_setValue('config', listOfItems);
-                    updateButton(2);
-                } else if (response.status == 400 || response.status == 401) { // invalid token
-                    updateButton(5);
-                    // Will prompt the user to enter a valid token
-                    askForToken("missing/invalid").then((value) => {
-                        API_TOKEN = value;
-                        buttonHandler(); // retry the API request
-                    }).catch((error) => {
-                        console.error(error);
-                    });
-                } else if (response.status == 422) { // incorrect parameters (API might have been updated) or posting is paused
-                    updateButton(6);
-                } else if (response.status == 429) { // too many requests
-                    updateButton(3);
-                }
-            }
-
-        }
 
         // Mutation observer fires every time the product title in the modal changes
         observer = new MutationObserver(function (mutations) {
@@ -354,10 +402,10 @@ NOTES:
                 document.querySelector("button.a-button-discord").style.display = 'none';
             } else if (wasPosted === queueType) {
                 // Product was already posted from the same queue before
-                updateButton(4);
+                updateButtonIcon(4);
             } else if (!isModalHidden) {
-                console.log("Adding event listener to button for asin "+parentAsin);
-                updateButton(0);
+                console.log("Adding event listener to button for ASIN "+parentAsin);
+                updateButtonIcon(0);
                 document.querySelector("button.a-button-discord").addEventListener("click", buttonHandler);
             }
 
