@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.3.2
+// @version      1.3.3
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items
@@ -32,6 +32,7 @@ NOTES:
 
     var API_TOKEN = GM_getValue("apiToken");
 
+    // Removes old products if they've been in local storage for 90+ days
     function purgeOldItems() {
         const items = GM_getValue("config");
         const date = new Date().getTime();
@@ -134,19 +135,21 @@ NOTES:
     }
 
     function variationFormatting(variations) {
-        var str = (Object.keys(variations).length > 1) ? '<:dropdown_options:1117467480860922018> ' : '<:dropdown_options:1117467480860922018> ';
+        var str = (Object.keys(variations).length > 1) ? '<:dropdown_options:1117467480860922018> Dropdowns' : '<:dropdown_options:1117467480860922018> Dropdown';
         for (const type in variations) {
             const t = (variations[type].length > 1) ? `${type}s` : `${type}`; // plural, if multiple
-            str += `\u200B\n${t}: ${variations[type].join('; ')} | `;
+            str += `\n\n***${t}:*** ${variations[type].join('; ')}`;
         }
 
-        return str.slice(0, -3);
+        return str;
     }
 
     function writeComment(productData) {
-        var comment = '';
-        comment += (productData.isLimited) ? "<:limited_ltd:1117538207362457611> Limited " : '';
-        comment += (productData.variations) ? variationFormatting(productData.variations) : '';
+        var comment = [];
+        (productData.isLimited) ? comment.push("<:limited_ltd:1117538207362457611> Limited") : null;
+        (productData.variations) ? comment.push(variationFormatting(productData.variations)) : null;
+
+        comment = comment.join('\n\n');
 
         if (comment.length > 900) {
             const index = comment.lastIndexOf(' ');
