@@ -10,6 +10,9 @@
 // @match        https://www.amazon.co.uk/vine/vine-items?queue=*
 // @match        https://www.amazon.ca/vine/vine-items
 // @match        https://www.amazon.ca/vine/vine-items?queue=*
+// @exclude      https://www.amazon.com/vine/vine-items?search*
+// @exclude      https://www.amazon.ca/vine/vine-items?search*
+// @exclude      https://www.amazon.co.uk/vine/vine-items?search*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
 // @updateURL    https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
 // @downloadURL  https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
