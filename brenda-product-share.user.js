@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.4.5
+// @version      1.4.6
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items
@@ -400,7 +400,7 @@ NOTES:
             var wasPosted = GM_getValue("config")[parentAsin]?.queue;
             var isModalHidden = (document.querySelector("a#vvp-product-details-modal--product-title").style.visibility === 'hidden') ? true : false;
 
-            if (hasError || queueType == null) {
+            if (hasError || queueType == null || window.location.href.includes('?search')) {
                 // Hide the Share button; no need to show it when there are errors
                 document.querySelector("button.a-button-discord").style.display = 'none';
             } else if (wasPosted === queueType) {
