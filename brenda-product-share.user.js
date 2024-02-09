@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.5.1
+// @version      1.5.2
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items
@@ -198,7 +198,7 @@ NOTES:
     function variationFormatting(variations) {
         var str = (Object.keys(variations).length > 1) ? '<:dropdown_options:1117467480860922018> Dropdowns' : '<:dropdown_options:1117467480860922018> Dropdown';
         for (const type in variations) {
-            const t = (variations[type].length > 1) ? `\n**${type.replace(/y([^y]*)$/, 'ie')}s (${variations[type].length}):** ` : `\n**${type}:** `; // plural, if multiple
+            const t = (variations[type].length > 1) ? `\n**${type.replace(/(y$)/, 'ie')}s (${variations[type].length}):** ` : `\n**${type}:** `; // plural, if multiple
             str += t + variations[type].join('; ');
         }
         return str;
