@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.4.6
+// @version      1.5
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items
@@ -35,20 +35,6 @@ NOTES:
 
     var API_TOKEN = GM_getValue("apiToken");
 
-    // Removes old products if they've been in stored for 90+ days
-    function purgeOldItems() {
-        const items = GM_getValue("config");
-        const date = new Date().getTime();
-
-        for (const obj in items) {
-            ((date - items[obj].date) >= 7776000000) ? delete items[obj] : null;
-        }
-        GM_setValue("config", items);
-
-    }
-
-    purgeOldItems();
-
     function addGlobalStyle(css) {
         var head, style;
         head = document.getElementsByTagName('head')[0];
@@ -65,6 +51,8 @@ NOTES:
     addGlobalStyle(`.a-button-discord.mobile-vertical { margin-top: 7px; margin-left: 0px; }`)
 
     const urlData = window.location.href.match(/(amazon..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
+    const MAX_COMMENT_LENGTH = 900;
+    const ITEM_EXPIRY = 7776000000; // 90 days in ms
 
     // Icons for the Share button
     const btn_discordSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -15 130 130" style="height: 25px;width: 26px;margin-right: 4px;">
@@ -75,6 +63,75 @@ NOTES:
     const btn_warning = `<span class='a-button-discord a-button-discord-icon a-button-discord-warning' style='background-position: -83px -117px;'></span>`;
     const btn_error = `<span class='a-button-discord a-button-discord-icon a-button-discord-error' style='background-position: -451px -421px;'></span>`;
     const btn_info = `<span class='a-button-discord a-button-discord-icon a-button-discord-info' style='background-position: -257px -353px;'></span>`;
+
+    // The modals related to error messages
+    const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert');
+
+    // Removes old products if they've been in stored for 90+ days
+    function purgeOldItems() {
+        const items = GM_getValue("config");
+        const date = new Date().getTime();
+
+        for (const obj in items) {
+            ((date - items[obj].date) >= ITEM_EXPIRY) ? delete items[obj] : null;
+        }
+        GM_setValue("config", items);
+
+    }
+
+    purgeOldItems();
+
+    // Comment gets truncated by its lists, since the lengths of those are unknown, and we'll just say how many more there are at the end
+    function truncateString(originalString) {
+        var arr = originalString.split('\n');
+        var tooLong = true;
+        var variantsRemoved = {};
+        var variantQuantities = {};
+        var truncatedString = '';
+        var count = 0;
+
+        function compareItemLengths(y) {
+            for (let x=0; x<arr.length; x++) {
+                if (x !== y && variantQuantities[y] >= variantQuantities[x] ) {
+                    return true;
+                }
+            }
+        }
+
+        while (tooLong) {
+
+            if (count > 30) {
+                tooLong = false; // in the rare likelihood that this will loop forever
+            }
+
+            for (let x=0; x<arr.length; x++) {
+                var split = arr[x].split('; ');
+                var fullArrayLength = arr.join('').length;
+                if (split.length > 1 && !variantQuantities[x]) {
+                    variantQuantities[x] = split.length;
+                }
+
+                if (split.length > 1 && fullArrayLength > MAX_COMMENT_LENGTH && compareItemLengths(x)) {
+                    variantQuantities[x] = split.length - 1; // keep track of this index's array length
+                    variantsRemoved[x] = (variantsRemoved.hasOwnProperty(x)) ? variantsRemoved[x]+1 : 1; // used for tracking the number of variants that were truncated
+                    split.pop();
+                    arr[x] = split.join('; ');
+                    arr[x] += `** ... +${variantsRemoved[x]} more**`;
+                } else if (fullArrayLength <= MAX_COMMENT_LENGTH) {
+                    break;
+                }
+            }
+
+            if (!(arr.join('\n').length > MAX_COMMENT_LENGTH)) {
+                // the string is finally short enough to be sent over the API
+                truncatedString = arr.join('\n');
+                tooLong = false;
+            }
+            count++;
+        }
+
+        return truncatedString.trim();
+    }
 
     function verifyToken(token) {
         return new Promise((resolve, reject) => {
@@ -131,7 +188,7 @@ NOTES:
 
             const type = elem.querySelector('h5').innerText;
             const names = Array.from(elem.querySelectorAll('.a-dropdown-container select option')).map(function(option) {
-                return option.innerText;
+                return option.innerText.replace(/[*_~|`]/g, '\\$&');
             });
             variations[type] = names;
         });
@@ -141,11 +198,29 @@ NOTES:
     function variationFormatting(variations) {
         var str = (Object.keys(variations).length > 1) ? '<:dropdown_options:1117467480860922018> Dropdowns' : '<:dropdown_options:1117467480860922018> Dropdown';
         for (const type in variations) {
-            const t = (variations[type].length > 1) ? `${type}s` : `${type}`; // plural, if multiple
-            str += `\n**${t}:** ${variations[type].join('; ')}`;
+            const t = (variations[type].length > 1) ? `\n**${type}s (${variations[type].length}):** ` : `\n**${type}:** `; // plural, if multiple
+            str += t + variations[type].join('; ');
         }
-
         return str;
+    }
+
+    function noteFormatting(notes) {
+        var str = (notes.length > 1) ? ':notepad_spiral: Notes' : ':notepad_spiral: Note';
+        for (const item of notes) {
+            (item != null) ? str += `\n* ${notes[item]}` : null;
+        }
+        return str;
+    }
+
+    // Checks if each dropdown has more than 1 selection
+    // Useful for pointing out misleading product photos when viewed on Vine
+    function countVariations(obj, notes) {
+        for (const key in obj) {
+            if (Array.isArray(obj[key]) && obj[key].length > 1) {
+                return null; // If there are multiple variations, then we're better off not alerting anyone
+            }
+        }
+        return "Parent and child photo don't match.";
     }
 
     function writeComment(productData) {
@@ -153,14 +228,17 @@ NOTES:
         (productData.isLimited) ? comment.push("<:limited_ltd:1117538207362457611> Limited") : null;
         (productData.variations) ? comment.push(variationFormatting(productData.variations)) : null;
 
+        var notes = [];
+        (productData.differentChild) ? notes.push(countVariations(productData.variations)) : null;
+        notes = notes.filter(value => value !== null);
+        (notes.length > 0) ? comment.push(noteFormatting(notes)) : null;
+
+        if (comment.length > MAX_COMMENT_LENGTH) {
+            comment = truncateString(comment); // Comment truncation, if necessary
+        }
+
         comment = comment.join('\n');
         comment = comment?.replace("\n", "\n\n"); // A fix for the weird formatting issue where the 1st line break requires 2 newlines instead of 1
-
-        if (comment.length > 900) {
-            const index = comment.lastIndexOf(' ');
-            comment = comment.substring(0, index);
-            comment += "...";
-        }
 
         return comment;
     }
@@ -349,8 +427,6 @@ NOTES:
 
     }
 
-    const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert');
-
     let parentAsin, queueType;
 
     // As much as I hate this, this adds event listeners to all of the "See details" buttons
@@ -382,7 +458,6 @@ NOTES:
 
         // Mutation observer fires every time the product title in the modal changes
         observer = new MutationObserver(function (mutations) {
-            console.log(mutations);
 
             if (!document.querySelector('.a-button-discord')) {
                 addShareButton();
@@ -407,7 +482,6 @@ NOTES:
                 // Product was already posted from the same queue before
                 updateButtonIcon(4);
             } else if (!isModalHidden) {
-                console.log("Adding event listener to button for ASIN "+parentAsin);
                 updateButtonIcon(0);
                 document.querySelector("button.a-button-discord").addEventListener("click", buttonHandler);
             }
