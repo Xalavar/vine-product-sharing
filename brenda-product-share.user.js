@@ -207,7 +207,7 @@ NOTES:
     function noteFormatting(notes) {
         var str = (notes.length > 1) ? ':notepad_spiral: Notes' : ':notepad_spiral: Note';
         for (const item of notes) {
-            (item != null) ? str += `\n* ${notes[item]}` : null;
+            (item != null) ? str += `\n* ${item}` : null;
         }
         return str;
     }
@@ -220,7 +220,7 @@ NOTES:
                 return null; // If there are multiple variations, then we're better off not alerting anyone
             }
         }
-        return "Parent and child photo don't match.";
+        return "Parent and child ASINs don't match.";
     }
 
     function writeComment(productData) {
