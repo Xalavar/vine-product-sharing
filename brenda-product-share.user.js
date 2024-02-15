@@ -1,18 +1,15 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.6.1
+// @version      1.6.2
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
-// @match        https://www.amazon.com/vine/vine-items
-// @match        https://www.amazon.com/vine/vine-items?queue=*
-// @match        https://www.amazon.co.uk/vine/vine-items
-// @match        https://www.amazon.co.uk/vine/vine-items?queue=*
-// @match        https://www.amazon.ca/vine/vine-items
-// @match        https://www.amazon.ca/vine/vine-items?queue=*
-// @exclude      https://www.amazon.com/vine/vine-items?search=*
-// @exclude      https://www.amazon.ca/vine/vine-items?search=*
-// @exclude      https://www.amazon.co.uk/vine/vine-items?search=*
+// @match        https://www.amazon.com/vine/vine-items*
+// @match        https://www.amazon.co.uk/vine/vine-items*
+// @match        https://www.amazon.ca/vine/vine-items*
+// @exclude      https://www.amazon.com/vine/vine-items*search=*
+// @exclude      https://www.amazon.ca/vine/vine-items*search=*
+// @exclude      https://www.amazon.co.uk/vine/vine-items*search=*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
 // @updateURL    https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
 // @downloadURL  https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
@@ -500,7 +497,7 @@ NOTES:
             var wasPosted = JSON.parse(localStorage.getItem("VDP_HISTORY"))[parentAsin]?.queue;
             var isModalHidden = (document.querySelector("a#vvp-product-details-modal--product-title").style.visibility === 'hidden') ? true : false;
 
-            if (hasError || queueType == null || window.location.href.includes('?search')) {
+            if (hasError || queueType == null || window.location.href.match(/[?&]search=/g)) {
                 // Hide the Share button; no need to show it when there are errors
                 document.querySelector("button.a-button-discord").style.display = 'none';
             } else if (wasPosted === queueType) {
