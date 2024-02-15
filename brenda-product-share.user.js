@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.5.4
+// @version      1.6
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items
@@ -31,9 +31,25 @@ NOTES:
 (function() {
     'use strict';
 
-    (GM_getValue("config")) ? GM_getValue("config") : GM_setValue("config", {}); // initialize the list of items that were posted to Discord
+    // Part of the migration process; will remove after a few months to ensure any remaining users have fully moved over
+    try {
+        var gmData = GM_getValue("config");
+        if (gmData) {
+            localStorage.setItem("VDP_HISTORY", JSON.stringify(gmData));
+            GM_deleteValue("config");
+        }
+        var gmToken = GM_getValue("apiToken");
+        if (gmToken) {
+            localStorage.setItem("VDP_API_TOKEN", gmToken);
+            GM_deleteValue("apiToken");
+        }
+    } catch(e) {
+        console.log(e);
+    }
 
-    var API_TOKEN = GM_getValue("apiToken");
+    (JSON.parse(localStorage.getItem("VDP_HISTORY"))) ? JSON.parse(localStorage.getItem("VDP_HISTORY")) : localStorage.setItem("VDP_HISTORY", JSON.stringify({})); // initialize the list of items that were posted to Discord
+
+    var API_TOKEN = localStorage.getItem("VDP_API_TOKEN");
 
     function addGlobalStyle(css) {
         var head, style;
@@ -47,35 +63,36 @@ NOTES:
         head.appendChild(style);
     }
 
-    addGlobalStyle(`.a-button-discord-icon { background-image: url(https://m.media-amazon.com/images/S/sash/ZNt8quAxIfEMMky.png); content: ""; padding: 10px 10px 10px 10px; background-size: 512px 512px; background-repeat: no-repeat; margin-right: 5px; vertical-align: middle; }`)
-    addGlobalStyle(`.a-button-discord.mobile-vertical { margin-top: 7px; margin-left: 0px; }`)
+    addGlobalStyle(`.a-button-discord > .a-button-text { padding-left: 6px; }`);
+    addGlobalStyle(`.a-button-discord-icon { background-image: url(https://m.media-amazon.com/images/S/sash/Gt1fHP07TsoILq3.png); content: ""; padding: 10px 10px 10px 10px; background-size: 512px 512px; background-repeat: no-repeat; margin-left: 10px; vertical-align: middle; }`);
+    addGlobalStyle(`.a-button-discord.mobile-vertical { margin-top: 7px; margin-left: 0px; }`);
 
     const urlData = window.location.href.match(/(amazon..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
     const MAX_COMMENT_LENGTH = 900;
     const ITEM_EXPIRY = 7776000000; // 90 days in ms
 
     // Icons for the Share button
-    const btn_discordSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -15 130 130" style="height: 25px;width: 26px;margin-right: 4px;">
+    const btn_discordSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -15 130 130" style="height: 30px; padding: 4px 0px 4px 10px;">
         <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" style="fill: #5865f2;"></path>
     </svg>`;
-    const btn_loadingAnim = `<span class="a-spinner a-spinner-small" style="margin-right: 5px;"></span>`;
-    const btn_checkmark = `<span class='a-button-discord a-button-discord-icon a-button-discord-success' style='background-position: -83px -137px;'></span>`;
-    const btn_warning = `<span class='a-button-discord a-button-discord-icon a-button-discord-warning' style='background-position: -83px -117px;'></span>`;
-    const btn_error = `<span class='a-button-discord a-button-discord-icon a-button-discord-error' style='background-position: -451px -421px;'></span>`;
-    const btn_info = `<span class='a-button-discord a-button-discord-icon a-button-discord-info' style='background-position: -257px -353px;'></span>`;
+    const btn_loadingAnim = `<span class="a-spinner a-spinner-small" style="margin-left: 10px;"></span>`;
+    const btn_checkmark = `<span class='a-button-discord-icon a-button-discord-success a-hires' style='background-position: -83px -116px;'></span>`;
+    const btn_warning = `<span class='a-button-discord-icon a-button-discord-warning a-hires' style='background-position: -83px -96px;'></span>`;
+    const btn_error = `<span class='a-button-discord-icon a-button-discord-error a-hires' style='background-position: -451px -422px;'></span>`;
+    const btn_info = `<span class='a-button-discord-icon a-button-discord-info a-hires' style='background-position: -257px -354px;'></span>`;
 
     // The modals related to error messages
     const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert');
 
     // Removes old products if they've been in stored for 90+ days
     function purgeOldItems() {
-        const items = GM_getValue("config");
+        const items = JSON.parse(localStorage.getItem("VDP_HISTORY"));
         const date = new Date().getTime();
 
         for (const obj in items) {
             ((date - items[obj].date) >= ITEM_EXPIRY) ? delete items[obj] : null;
         }
-        GM_setValue("config", items);
+        localStorage.setItem("VDP_HISTORY", JSON.stringify(items));
 
     }
 
@@ -105,7 +122,7 @@ NOTES:
             }
 
             for (let x=0; x<arr.length; x++) {
-                var split = arr[x].split('; ');
+                var split = arr[x].split(' ● ');
                 var fullArrayLength = arr.join('').length;
                 if (split.length > 1 && !variantQuantities[x]) {
                     variantQuantities[x] = split.length;
@@ -115,7 +132,7 @@ NOTES:
                     variantQuantities[x] = split.length - 1; // keep track of this index's array length
                     variantsRemoved[x] = (variantsRemoved.hasOwnProperty(x)) ? variantsRemoved[x]+1 : 1; // used for tracking the number of variants that were truncated
                     split.pop();
-                    arr[x] = split.join('; ');
+                    arr[x] = split.join(' ● ');
                     arr[x] += `** ... +${variantsRemoved[x]} more**`;
                 } else if (fullArrayLength <= MAX_COMMENT_LENGTH) {
                     break;
@@ -150,6 +167,7 @@ NOTES:
                     reject(error);
                 },
             });
+
         });
     }
 
@@ -162,13 +180,14 @@ NOTES:
                     var response = await verifyToken(userInput);
                     if (response && response.status === 200) {
                         // Save token after validation
-                        GM_setValue('apiToken', userInput);
+                        localStorage.setItem("VDP_API_TOKEN", JSON.stringify(userInput));
                         resolve(userInput);
                     } else if (response && response.status === 404) {
                         alert("API token is invalid!");
                         reject("Invalid API token");
                     } else {
                         alert("API token authorization failed. Please try again later.");
+                        console.log(`${response}`);
                         reject("Authorization failed");
                     }
                 } catch (error) {
@@ -199,7 +218,7 @@ NOTES:
         var str = (Object.keys(variations).length > 1) ? '<:dropdown_options:1117467480860922018> Dropdowns' : '<:dropdown_options:1117467480860922018> Dropdown';
         for (const type in variations) {
             const t = (variations[type].length > 1) ? `\n**${type.replace(/(y$)/, 'ie')}s (${variations[type].length}):** ` : `\n**${type}:** `; // plural, if multiple
-            str += t + variations[type].join('; ');
+            str += t + variations[type].join(' ● ');
         }
         return str;
     }
@@ -220,11 +239,12 @@ NOTES:
                 return null; // If there are multiple variations, then we're better off not alerting anyone
             }
         }
-        return "Parent and child ASINs don't match.";
+        return "Parent and child ASIN don't match.";
     }
 
     function writeComment(productData) {
         var comment = [];
+        (productData.seller) ? comment.push(`Seller: ${productData.seller}`) : null;
         (productData.isLimited) ? comment.push("<:limited_ltd:1117538207362457611> Limited") : null;
         (productData.variations) ? comment.push(variationFormatting(productData.variations)) : null;
 
@@ -256,12 +276,13 @@ NOTES:
         productData.differentChild = (parentAsin !== childAsin) ? true : false; // comparing the asin loaded in the modal to the one on the webpage
         productData.etv = document.querySelector("#vvp-product-details-modal--tax-value-string")?.innerText.replace("$", "");
         productData.queue = queueType;
-        productData.comments = writeComment(productData);
+        productData.seller = document.querySelector("#vvp-product-details-modal--by-line").innerText.replace(/^by /, '');
         // possibly more things to come...
+        productData.comments = writeComment(productData);
 
         const response = await sendDataToAPI(productData);
 
-        var listOfItems = GM_getValue('config');
+        var listOfItems = JSON.parse(localStorage.getItem("VDP_HISTORY"));
 
         if (response) {
             // deal with the API response
@@ -270,7 +291,7 @@ NOTES:
                 listOfItems[productData.asin].status = 'Posted';
                 listOfItems[productData.asin].queue = productData.queue;
                 listOfItems[productData.asin].date = new Date().getTime();
-                GM_setValue('config', listOfItems);
+                localStorage.setItem("VDP_HISTORY", JSON.stringify(listOfItems));
                 updateButtonIcon(2);
             } else if (response.status == 400 || response.status == 401) { // invalid token
                 updateButtonIcon(5);
@@ -332,7 +353,7 @@ NOTES:
 
     // Initialize the button
     function addShareButton() {
-        var discordBtn = `<button class="a-button-discord" aria-label="Post to Discord" style="align-items: center; height: 31px;"></button>`;
+        var discordBtn = `<button class="a-button-discord a-button" style="align-items: center;"></button>`;
         var modalElems = getCorrectModal(); // ensuring the button gets added to the correct modal
         modalElems[0].insertAdjacentHTML('afterbegin', discordBtn);
         productDetailsModal = modalElems[1];
@@ -345,32 +366,35 @@ NOTES:
 
     function updateButtonIcon(type) {
         var discordBtn = document.querySelector('.a-button-discord');
+        discordBtn.disabled = false;
+        discordBtn.classList.remove('a-button-disabled');
+
         if (type == 0) { // default
-            discordBtn.innerHTML = `${btn_discordSvg} Share on Discord`;
-            discordBtn.disabled = false;
+            discordBtn.innerHTML = `${btn_discordSvg}<span class="a-button-text">Share on Discord</span>`;
             discordBtn.style.cursor = 'pointer';
         } else if (type == 1) { // submit button is clicked and waiting for API result
-            discordBtn.innerHTML = `${btn_loadingAnim} Submitting...`;
+            discordBtn.innerHTML = `${btn_loadingAnim}<span class="a-button-text">Submitting...</span>`;
             discordBtn.disabled = true;
             discordBtn.style.cursor = 'no-drop';
         } else if (type == 2) { // API: success
-            discordBtn.innerHTML = `${btn_checkmark} Done!`;
+            discordBtn.innerHTML = `${btn_checkmark}<span class="a-button-text">Done!</span>`;
             discordBtn.disabled = true;
+            discordBtn.classList.add('a-button-disabled');
         } else if (type == 3) { // API: posting too quickly
-            discordBtn.innerHTML = `${btn_warning} Sharing too quickly!`;
-            discordBtn.disabled = false;
+            discordBtn.innerHTML = `${btn_warning}<span class="a-button-text">Sharing too quickly!</span>`;
             discordBtn.style.cursor = 'pointer';
         } else if (type == 4) { // Item was already posted to Discord
-            discordBtn.innerHTML = `${btn_info} Already posted`;
+            discordBtn.innerHTML = `${btn_info}<span class="a-button-text">Already posted</span>`;
             discordBtn.disabled = true;
+            discordBtn.classList.add('a-button-disabled');
             discordBtn.style.cursor = 'no-drop';
         } else if (type == 5) { // API: invalid token
-            discordBtn.innerHTML = `${btn_error} Invalid token`;
+            discordBtn.innerHTML = `${btn_error}<span class="a-button-text">Invalid token</span>`;
             discordBtn.disabled = true;
+            discordBtn.classList.add('a-button-disabled');
             discordBtn.style.cursor = 'no-drop';
         } else if (type == 6) { // API: incorrect parameters
-            discordBtn.innerHTML = `${btn_warning} Something went wrong`;
-            discordBtn.disabled = false;
+            discordBtn.innerHTML = `${btn_error}<span class="a-button-text">Something went wrong</span>`;
             discordBtn.style.cursor = 'pointer';
         }
 
@@ -472,7 +496,7 @@ NOTES:
             var hasError = !Array.from(errorMessages).every(function(elem) {
                 return elem.style.display === 'none';
             });
-            var wasPosted = GM_getValue("config")[parentAsin]?.queue;
+            var wasPosted = JSON.parse(localStorage.getItem("VDP_HISTORY"))[parentAsin]?.queue;
             var isModalHidden = (document.querySelector("a#vvp-product-details-modal--product-title").style.visibility === 'hidden') ? true : false;
 
             if (hasError || queueType == null || window.location.href.includes('?search')) {
