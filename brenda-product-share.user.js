@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    http://tampermonkey.net/
-// @version      1.6.4
+// @version      1.6.5
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -237,7 +237,7 @@ NOTES:
                 return null; // If there are multiple variations, then we're better off not alerting anyone
             }
         }
-        return "";
+        return null;
         //return "Parent and child ASIN don't match.";
     }
 
