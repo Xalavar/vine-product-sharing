@@ -1,19 +1,15 @@
 // ==UserScript==
 // @name         Vine Discord Poster
-// @namespace    http://tampermonkey.net/
-// @version      1.6.5
+// @namespace    https://github.com/Xalavar
+// @version      1.7
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
 // @match        https://www.amazon.co.uk/vine/vine-items*
 // @match        https://www.amazon.ca/vine/vine-items*
-// @exclude      https://www.amazon.com/vine/vine-items*search=*
-// @exclude      https://www.amazon.ca/vine/vine-items*search=*
-// @exclude      https://www.amazon.co.uk/vine/vine-items*search=*
 // @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
 // @updateURL    https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
 // @downloadURL  https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
-// @grant        GM_xmlhttpRequest
 // @grant        GM_setValue
 // @grant        GM_getValue
 // @grant        GM_deleteValue
@@ -45,8 +41,9 @@ NOTES:
         console.log(e);
     }
 
-    (JSON.parse(localStorage.getItem("VDP_HISTORY"))) ? JSON.parse(localStorage.getItem("VDP_HISTORY")) : localStorage.setItem("VDP_HISTORY", JSON.stringify({})); // initialize the list of items that were posted to Discord
-
+    // initializing various localStorage items
+    (JSON.parse(localStorage.getItem("VDP_HISTORY"))) ? JSON.parse(localStorage.getItem("VDP_HISTORY")) : localStorage.setItem("VDP_HISTORY", JSON.stringify({}));
+    (localStorage.getItem("VDP_COOLDOWN")) ? localStorage.getItem("VDP_COOLDOWN") : localStorage.setItem("VDP_COOLDOWN", 0);
     var API_TOKEN = localStorage.getItem("VDP_API_TOKEN");
 
     function addGlobalStyle(css) {
@@ -65,12 +62,14 @@ NOTES:
     addGlobalStyle(`.a-button-discord-icon { background-image: url(https://m.media-amazon.com/images/S/sash/Gt1fHP07TsoILq3.png); content: ""; padding: 10px 10px 10px 10px; background-size: 512px 512px; background-repeat: no-repeat; margin-left: 10px; vertical-align: middle; }`);
     addGlobalStyle(`.a-button-discord.mobile-vertical { margin-top: 7px; margin-left: 0px; }`);
 
-    const urlData = window.location.href.match(/(amazon..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
+    const urlData = window.location.href.match(/(?!.*search)(amazon\..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
     const MAX_COMMENT_LENGTH = 900;
     const ITEM_EXPIRY = 7776000000; // 90 days in ms
+    const API_RATE_LIMIT = 10000;
+    const PRODUCT_IMAGE_ID = /.+\/(.*)\._SS[0-9]+_\.[a-z]{3,4}$/;
 
     // Icons for the Share button
-    const btn_discordSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -15 130 130" style="height: 30px; padding: 4px 0px 4px 10px;">
+    const btn_discordSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -15 130 130" style="height: 29px; padding: 4px 0px 4px 10px;">
         <path d="M107.7,8.07A105.15,105.15,0,0,0,81.47,0a72.06,72.06,0,0,0-3.36,6.83A97.68,97.68,0,0,0,49,6.83,72.37,72.37,0,0,0,45.64,0,105.89,105.89,0,0,0,19.39,8.09C2.79,32.65-1.71,56.6.54,80.21h0A105.73,105.73,0,0,0,32.71,96.36,77.7,77.7,0,0,0,39.6,85.25a68.42,68.42,0,0,1-10.85-5.18c.91-.66,1.8-1.34,2.66-2a75.57,75.57,0,0,0,64.32,0c.87.71,1.76,1.39,2.66,2a68.68,68.68,0,0,1-10.87,5.19,77,77,0,0,0,6.89,11.1A105.25,105.25,0,0,0,126.6,80.22h0C129.24,52.84,122.09,29.11,107.7,8.07ZM42.45,65.69C36.18,65.69,31,60,31,53s5-12.74,11.43-12.74S54,46,53.89,53,48.84,65.69,42.45,65.69Zm42.24,0C78.41,65.69,73.25,60,73.25,53s5-12.74,11.44-12.74S96.23,46,96.12,53,91.08,65.69,84.69,65.69Z" style="fill: #5865f2;"></path>
     </svg>`;
     const btn_loadingAnim = `<span class="a-spinner a-spinner-small" style="margin-left: 10px;"></span>`;
@@ -79,8 +78,7 @@ NOTES:
     const btn_error = `<span class='a-button-discord-icon a-button-discord-error a-hires' style='background-position: -451px -422px;'></span>`;
     const btn_info = `<span class='a-button-discord-icon a-button-discord-info a-hires' style='background-position: -257px -354px;'></span>`;
 
-    // The modals related to error messages
-    const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert');
+    const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert'); // modals pertaining to error messages
 
     // Removes old products if they've been in stored for 90+ days
     function purgeOldItems() {
@@ -150,21 +148,17 @@ NOTES:
 
     function verifyToken(token) {
         return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: "GET",
-                url: `https://api.llamastories.com/brenda/user/${token}`,
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                onload: function(response) {
-                    console.log(response.status, response.responseText);
-                    resolve(response);
-                },
-                onerror: function(error) {
-                    console.error(error);
-                    reject(error);
-                },
-            });
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                    console.log(xhr.status, xhr.responseText);
+                    resolve(xhr);
+                }
+            };
+
+            xhr.open("GET", `https://api.llamastories.com/brenda/user/${token}`, true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.send();
 
         });
     }
@@ -178,7 +172,7 @@ NOTES:
                     var response = await verifyToken(userInput);
                     if (response && response.status === 200) {
                         // Save token after validation
-                        localStorage.setItem("VDP_API_TOKEN", JSON.stringify(userInput));
+                        localStorage.setItem("VDP_API_TOKEN", userInput);
                         resolve(userInput);
                     } else if (response && response.status === 404) {
                         alert("API token is invalid!");
@@ -229,31 +223,36 @@ NOTES:
         return str;
     }
 
-    // Checks if each dropdown has more than 1 selection
-    // Useful for pointing out misleading product photos when viewed on Vine
-    function countVariations(obj, notes) {
+    // Checks if each dropdown has more than 1 option
+    // Useful for pointing out misleading parent products
+    function countVariations(obj) {
         for (const key in obj) {
             if (Array.isArray(obj[key]) && obj[key].length > 1) {
-                return null; // If there are multiple variations, then we're better off not alerting anyone
+                return false; // If there are multiple variations, then we're better off not alerting anyone
             }
         }
-        return null;
-        //return "Parent and child ASIN don't match.";
+        return true;
     }
 
     function writeComment(productData) {
+
+        var hasNoSiblings = countVariations(productData.variations);
+
         var comment = [];
         (productData.seller) ? comment.push(`Seller: ${productData.seller}`) : null;
         (productData.isLimited) ? comment.push("<:limited_ltd:1117538207362457611> Limited") : null;
         (productData.variations) ? comment.push(variationFormatting(productData.variations)) : null;
 
         var notes = [];
-        (productData.differentChild) ? notes.push(countVariations(productData.variations)) : null;
+        // different image urls
+        (productData.differentImages && hasNoSiblings) ? notes.push("Parent product photo might not reflect available child variant.") : null;
+
         notes = notes.filter(value => value !== null);
         (notes.length > 0) ? comment.push(noteFormatting(notes)) : null;
 
+        // Apply comment truncation, if necessary
         if (comment.length > MAX_COMMENT_LENGTH) {
-            comment = truncateString(comment); // Comment truncation, if necessary
+            comment = truncateString(comment);
         }
 
         comment = comment.join('\n');
@@ -267,15 +266,20 @@ NOTES:
         // Prepping data to be sent to the API
         var productData = {};
         var childAsin = document.querySelector("a#vvp-product-details-modal--product-title").href.match(/amazon..+\/dp\/([A-Z0-9]+).*$/)[1];
+        var childImage = document.querySelector('#vvp-product-details-img-container > img');
+
         var variations = returnVariations();
         productData.variations = (Object.keys(variations).length > 0) ? variations : null;
         productData.isLimited = (document.querySelector('#vvp-product-details-modal--limited-quantity').style.display !== 'none') ? true : false;
         productData.asin = parentAsin;
         productData.differentChild = (parentAsin !== childAsin) ? true : false; // comparing the asin loaded in the modal to the one on the webpage
+        productData.differentImages = (parentImage !== childImage.src?.match(PRODUCT_IMAGE_ID)[1]) ? true : false;
         productData.etv = document.querySelector("#vvp-product-details-modal--tax-value-string")?.innerText.replace("$", "");
         productData.queue = queueType;
         productData.seller = document.querySelector("#vvp-product-details-modal--by-line").innerText.replace(/^by /, '');
         // possibly more things to come...
+
+        // Compile everything miscellaneous into a comment string
         productData.comments = writeComment(productData);
 
         const response = await sendDataToAPI(productData);
@@ -290,9 +294,10 @@ NOTES:
                 listOfItems[productData.asin].queue = productData.queue;
                 listOfItems[productData.asin].date = new Date().getTime();
                 localStorage.setItem("VDP_HISTORY", JSON.stringify(listOfItems));
-                updateButtonIcon(2);
+                setButtonState(2);
+                localStorage.setItem("VDP_COOLDOWN", listOfItems[productData.asin].date);
             } else if (response.status == 400 || response.status == 401) { // invalid token
-                updateButtonIcon(5);
+                setButtonState(5);
                 // Will prompt the user to enter a valid token
                 askForToken("missing/invalid").then((value) => {
                     API_TOKEN = value;
@@ -301,9 +306,9 @@ NOTES:
                     console.error(error);
                 });
             } else if (response.status == 422) { // incorrect parameters (API might have been updated) or posting is paused
-                updateButtonIcon(6);
+                setButtonState(6);
             } else if (response.status == 429) { // too many requests
-                updateButtonIcon(3);
+                setButtonState(3);
             }
         }
 
@@ -362,12 +367,45 @@ NOTES:
 
     }
 
-    function updateButtonIcon(type) {
+    // Offers more transparency regarding how long the rate limit of the API is
+    function addButtonTimer(button) {
+        var storedTimestamp = localStorage.getItem('VDP_COOLDOWN');
+        var currentTimestamp = Date.now();
+        var timeDifference = currentTimestamp - storedTimestamp;
+        var remainingTime = API_RATE_LIMIT - timeDifference;
+        var duration = 1000;
+
+        if (remainingTime <= 0) {
+            setButtonState(0);
+        } else {
+            button.innerHTML = `${btn_warning}<span class="a-button-text">Cooldown (${Math.floor(remainingTime / 1000)}s)</span>`;
+            button.style.cursor = 'no-drop';
+            button.disabled = true;
+            duration = (remainingTime < 1000) ? remainingTime : duration; // having the duration match the remaining time makes it more precise
+            setTimeout(function() {
+                addButtonTimer(button);
+            }, duration);
+
+        }
+    }
+
+    function setButtonState(type) {
         var discordBtn = document.querySelector('.a-button-discord');
+        var cooldownTimer = () => {
+            var timeDiff = Date.now() - localStorage.getItem('VDP_COOLDOWN');
+            if (timeDiff < API_RATE_LIMIT) {
+                return timeDiff;
+            }
+            return false;
+        }
+
+        // reset the button
         discordBtn.disabled = false;
         discordBtn.classList.remove('a-button-disabled');
 
-        if (type == 0) { // default
+        if (type == 0 && cooldownTimer()) { // default
+            addButtonTimer(discordBtn);
+        } else if (type == 0) {
             discordBtn.innerHTML = `${btn_discordSvg}<span class="a-button-text">Share on Discord</span>`;
             discordBtn.style.cursor = 'pointer';
         } else if (type == 1) { // submit button is clicked and waiting for API result
@@ -410,28 +448,21 @@ NOTES:
             comment: data.comments,
         });
 
-        updateButtonIcon(1);
+        setButtonState(1);
 
         return new Promise((resolve, reject) => {
-            GM_xmlhttpRequest({
-                method: "PUT",
-                url: "https://api.llamastories.com/brenda/product",
-                data: formData.toString(),
-                headers: {
-                    "Content-Type": "application/x-www-form-urlencoded",
-                },
-                onload: function(response) {
-                    console.log(response.status, response.responseText);
-                    resolve(response);
-                },
-                onerror: function(error) {
-                    console.error(error);
-                    updateButtonIcon(6);
-                    reject(error);
-                },
-            });
-        });
+            var xhr = new XMLHttpRequest();
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === XMLHttpRequest.DONE) {
+                    console.log(xhr.status, xhr.responseText);
+                    resolve(xhr);
+                }
+            };
 
+            xhr.open("PUT", "https://api.llamastories.com/brenda/product", true);
+            xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
+            xhr.send(formData);
+        });
     }
 
     // Determining the queue type from the HTML dom
@@ -449,13 +480,14 @@ NOTES:
 
     }
 
-    let parentAsin, queueType;
+    let parentAsin, parentImage, queueType;
 
     // As much as I hate this, this adds event listeners to all of the "See details" buttons
     document.querySelectorAll('.a-button-primary.vvp-details-btn > .a-button-inner > input').forEach(function(element) {
         element.addEventListener('click', function() {
 
             parentAsin = this.getAttribute('data-asin');
+            parentImage = this.parentElement.parentElement.parentElement.querySelector('img').src.match(PRODUCT_IMAGE_ID)[1];
             queueType = urlData?.[2] || d_queueType(this.getAttribute('data-recommendation-type'));
 
             // silencing console errors; a null error is inevitable with this arrangement; I might fix this in the future
@@ -497,14 +529,14 @@ NOTES:
             var wasPosted = JSON.parse(localStorage.getItem("VDP_HISTORY"))[parentAsin]?.queue;
             var isModalHidden = (document.querySelector("a#vvp-product-details-modal--product-title").style.visibility === 'hidden') ? true : false;
 
-            if (hasError || queueType == null || window.location.href.match(/[?&]search=/g)) {
-                // Hide the Share button; no need to show it when there are errors
+            if (hasError || queueType == null) {
+                // Hide the Share button
                 document.querySelector("button.a-button-discord").style.display = 'none';
             } else if (wasPosted === queueType) {
                 // Product was already posted from the same queue before
-                updateButtonIcon(4);
+                setButtonState(4);
             } else if (!isModalHidden) {
-                updateButtonIcon(0);
+                setButtonState(0);
                 document.querySelector("button.a-button-discord").addEventListener("click", buttonHandler);
             }
 
