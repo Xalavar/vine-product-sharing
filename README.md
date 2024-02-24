@@ -15,10 +15,10 @@ This script basically compiles the product information loaded onto the page and 
 
 Here's a list of things it pulls from each product:
 
-* ETV
+* ETV (Estimated Taxable Value)
 * Seller name
-* Variant names
-* Variant types
+* Dropdown names
+* Dropdown options
 * Limited quantity
 
 # Compatibility
@@ -44,11 +44,11 @@ Extensions:
 
 **Q**: Can I use this for a different Discord server?
 
-**A**: Technically, yes, you can, but you'll likely need to make some light to heavy modifications and possibly add your own code. If this is something you want to do, I would suggest forking this repository so we can better collaborate.
+**A**: Yes, but you'll likely need to make some modifications and possibly add your own code. If this is something you want to do, I would suggest forking this repository so you can keep your version up to date. You'd also need an API and a server to help manage the data that gets sent to your Discord server.
 
 **Q**: Could I get kicked out of Vine for using this?
 
-**A**: No, this is 100% safe to use. It doesn't pull any information from Amazon's servers, so it won't trip up the bot detection on their website.
+**A**: No. This is 100% safe to use and won't trip up Amazon's bot detection because it's only reading information on the page and not interacting with Amazon's servers in any way.
 
 **Q**: How do I get invited to Vi—
 
