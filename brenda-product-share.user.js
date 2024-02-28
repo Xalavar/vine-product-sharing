@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      1.7
+// @version      1.7.1
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -67,6 +67,7 @@ NOTES:
     const ITEM_EXPIRY = 7776000000; // 90 days in ms
     const API_RATE_LIMIT = 10000;
     const PRODUCT_IMAGE_ID = /.+\/(.*)\._SS[0-9]+_\.[a-z]{3,4}$/;
+    const PRODUCT_TITLE_LENGTH = 47; // should match the length of the product title that is anticipated to show up on the embed
 
     // Icons for the Share button
     const btn_discordSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -15 130 130" style="height: 29px; padding: 4px 0px 4px 10px;">
@@ -199,7 +200,7 @@ NOTES:
 
             const type = elem.querySelector('h5').innerText;
             const names = Array.from(elem.querySelectorAll('.a-dropdown-container select option')).map(function(option) {
-                return option.innerText.replace(/[*_~|`]/g, '\\$&');
+                return option.innerText.replace(/[*_~|`]/g, '\\$&'); // cancelling out any potential characters that would affect Discord formatting
             });
             variations[type] = names;
         });
@@ -239,7 +240,7 @@ NOTES:
         var hasNoSiblings = countVariations(productData.variations);
 
         var comment = [];
-        (productData.seller) ? comment.push(`Seller: ${productData.seller}`) : null;
+        (productData.byLine) ? comment.push(`Brand: ${productData.byLine}`) : null;
         (productData.isLimited) ? comment.push("<:limited_ltd:1117538207362457611> Limited") : null;
         (productData.variations) ? comment.push(variationFormatting(productData.variations)) : null;
 
@@ -267,6 +268,7 @@ NOTES:
         var productData = {};
         var childAsin = document.querySelector("a#vvp-product-details-modal--product-title").href.match(/amazon..+\/dp\/([A-Z0-9]+).*$/)[1];
         var childImage = document.querySelector('#vvp-product-details-img-container > img');
+        var productByLine = document.querySelector("#vvp-product-details-modal--by-line").innerText.replace(/^by /, '');
 
         var variations = returnVariations();
         productData.variations = (Object.keys(variations).length > 0) ? variations : null;
@@ -276,7 +278,7 @@ NOTES:
         productData.differentImages = (parentImage !== childImage.src?.match(PRODUCT_IMAGE_ID)[1]) ? true : false;
         productData.etv = document.querySelector("#vvp-product-details-modal--tax-value-string")?.innerText.replace("$", "");
         productData.queue = queueType;
-        productData.seller = document.querySelector("#vvp-product-details-modal--by-line").innerText.replace(/^by /, '');
+        productData.byLine = (!parentTitle.includes(productByLine)) ? productByLine : null;
         // possibly more things to come...
 
         // Compile everything miscellaneous into a comment string
@@ -480,7 +482,7 @@ NOTES:
 
     }
 
-    let parentAsin, parentImage, queueType;
+    let parentAsin, parentImage, parentTitle, queueType;
 
     // As much as I hate this, this adds event listeners to all of the "See details" buttons
     document.querySelectorAll('.a-button-primary.vvp-details-btn > .a-button-inner > input').forEach(function(element) {
@@ -488,6 +490,7 @@ NOTES:
 
             parentAsin = this.getAttribute('data-asin');
             parentImage = this.parentElement.parentElement.parentElement.querySelector('img').src.match(PRODUCT_IMAGE_ID)[1];
+            parentTitle = this.parentElement.parentElement.parentElement.querySelector('.vvp-item-product-title-container .a-truncate-full.a-offscreen').textContent.substring(0, PRODUCT_TITLE_LENGTH);
             queueType = urlData?.[2] || d_queueType(this.getAttribute('data-recommendation-type'));
 
             // silencing console errors; a null error is inevitable with this arrangement; I might fix this in the future
