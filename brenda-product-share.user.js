@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      1.7.1
+// @version      1.7.2
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -104,6 +104,7 @@ NOTES:
         var truncatedString = '';
         var count = 0;
 
+        // Comparing the number of variants in each type to ensure only the one with the most gets truncated first
         function compareItemLengths(y) {
             for (let x=0; x<arr.length; x++) {
                 if (x !== y && variantQuantities[y] >= variantQuantities[x] ) {
@@ -115,7 +116,7 @@ NOTES:
         while (tooLong) {
 
             if (count > 30) {
-                tooLong = false; // in the rare likelihood that this will loop forever
+                tooLong = false; // in the rare likelihood that this might loop forever
             }
 
             for (let x=0; x<arr.length; x++) {
@@ -128,7 +129,7 @@ NOTES:
                 if (split.length > 1 && fullArrayLength > MAX_COMMENT_LENGTH && compareItemLengths(x)) {
                     variantQuantities[x] = split.length - 1; // keep track of this index's array length
                     variantsRemoved[x] = (variantsRemoved.hasOwnProperty(x)) ? variantsRemoved[x]+1 : 1; // used for tracking the number of variants that were truncated
-                    split.pop();
+                    split.pop(); // removing the last variant from the array
                     arr[x] = split.join(' ● ');
                     arr[x] += `** ... +${variantsRemoved[x]} more**`;
                 } else if (fullArrayLength <= MAX_COMMENT_LENGTH) {
@@ -251,12 +252,12 @@ NOTES:
         notes = notes.filter(value => value !== null);
         (notes.length > 0) ? comment.push(noteFormatting(notes)) : null;
 
+        comment = comment.join('\n');
+
         // Apply comment truncation, if necessary
         if (comment.length > MAX_COMMENT_LENGTH) {
             comment = truncateString(comment);
         }
-
-        comment = comment.join('\n');
 
         return comment;
     }
@@ -307,7 +308,7 @@ NOTES:
                 }).catch((error) => {
                     console.error(error);
                 });
-            } else if (response.status == 422) { // incorrect parameters (API might have been updated) or posting is paused
+            } else if (response.status == 422) { // incorrect parameters (API might have been updated or posting is paused)
                 setButtonState(6);
             } else if (response.status == 429) { // too many requests
                 setButtonState(3);
@@ -316,29 +317,26 @@ NOTES:
 
     }
 
-    let productDetailsModal;
+    let productDetailsModal, shareButtonElem;
 
     // Update position of the button
     function updateButtonPosition() {
-        const button = document.querySelector('.a-button-discord');
-        const container = productDetailsModal;
-
         // check the size of the modal first before determining where the button goes
-        if (container.offsetWidth < container.offsetHeight) {
+        if (productDetailsModal.offsetWidth < productDetailsModal.offsetHeight) {
             // the See Details modal is taller, so moving it toward the bottom
-            button.classList.add('mobile-vertical');
-            button.parentElement.appendChild(button);
+            shareButtonElem.classList.add('mobile-vertical');
+            shareButtonElem.parentElement.appendChild(shareButtonElem);
         } else {
             // revert to the original button placement
-            button.classList.remove('mobile-vertical');
-            button.parentElement.prepend(button);
+            shareButtonElem.classList.remove('mobile-vertical');
+            shareButtonElem.parentElement.prepend(shareButtonElem);
         }
 
-        button.removeElement; // remove the old button
-        button.addEventListener("click", buttonHandler);
+        shareButtonElem.removeElement; // remove the old button
+        shareButtonElem.addEventListener("click", buttonHandler);
     }
 
-    // Distinguishes the correct modal since Amazon doesn't distinguish them at all
+    // Distinguishes the correct modal since the webpage doesn't
     function getCorrectModal() {
         var btnHeaders = document.querySelectorAll('.vvp-modal-footer');
         var filteredHeaders = Array.from(btnHeaders).map(function (modal) {
@@ -392,7 +390,6 @@ NOTES:
     }
 
     function setButtonState(type) {
-        var discordBtn = document.querySelector('.a-button-discord');
         var cooldownTimer = () => {
             var timeDiff = Date.now() - localStorage.getItem('VDP_COOLDOWN');
             if (timeDiff < API_RATE_LIMIT) {
@@ -402,38 +399,38 @@ NOTES:
         }
 
         // reset the button
-        discordBtn.disabled = false;
-        discordBtn.classList.remove('a-button-disabled');
+        shareButtonElem.disabled = false;
+        shareButtonElem.classList.remove('a-button-disabled');
 
         if (type == 0 && cooldownTimer()) { // default
-            addButtonTimer(discordBtn);
+            addButtonTimer(shareButtonElem);
         } else if (type == 0) {
-            discordBtn.innerHTML = `${btn_discordSvg}<span class="a-button-text">Share on Discord</span>`;
-            discordBtn.style.cursor = 'pointer';
+            shareButtonElem.innerHTML = `${btn_discordSvg}<span class="a-button-text">Share on Discord</span>`;
+            shareButtonElem.style.cursor = 'pointer';
         } else if (type == 1) { // submit button is clicked and waiting for API result
-            discordBtn.innerHTML = `${btn_loadingAnim}<span class="a-button-text">Submitting...</span>`;
-            discordBtn.disabled = true;
-            discordBtn.style.cursor = 'no-drop';
+            shareButtonElem.innerHTML = `${btn_loadingAnim}<span class="a-button-text">Submitting...</span>`;
+            shareButtonElem.disabled = true;
+            shareButtonElem.style.cursor = 'no-drop';
         } else if (type == 2) { // API: success
-            discordBtn.innerHTML = `${btn_checkmark}<span class="a-button-text">Done!</span>`;
-            discordBtn.disabled = true;
-            discordBtn.classList.add('a-button-disabled');
+            shareButtonElem.innerHTML = `${btn_checkmark}<span class="a-button-text">Done!</span>`;
+            shareButtonElem.disabled = true;
+            shareButtonElem.classList.add('a-button-disabled');
         } else if (type == 3) { // API: posting too quickly
-            discordBtn.innerHTML = `${btn_warning}<span class="a-button-text">Sharing too quickly!</span>`;
-            discordBtn.style.cursor = 'pointer';
+            shareButtonElem.innerHTML = `${btn_warning}<span class="a-button-text">Sharing too quickly!</span>`;
+            shareButtonElem.style.cursor = 'pointer';
         } else if (type == 4) { // Item was already posted to Discord
-            discordBtn.innerHTML = `${btn_info}<span class="a-button-text">Already posted</span>`;
-            discordBtn.disabled = true;
-            discordBtn.classList.add('a-button-disabled');
-            discordBtn.style.cursor = 'no-drop';
+            shareButtonElem.innerHTML = `${btn_info}<span class="a-button-text">Already posted</span>`;
+            shareButtonElem.disabled = true;
+            shareButtonElem.classList.add('a-button-disabled');
+            shareButtonElem.style.cursor = 'no-drop';
         } else if (type == 5) { // API: invalid token
-            discordBtn.innerHTML = `${btn_error}<span class="a-button-text">Invalid token</span>`;
-            discordBtn.disabled = true;
-            discordBtn.classList.add('a-button-disabled');
-            discordBtn.style.cursor = 'no-drop';
+            shareButtonElem.innerHTML = `${btn_error}<span class="a-button-text">Invalid token</span>`;
+            shareButtonElem.disabled = true;
+            shareButtonElem.classList.add('a-button-disabled');
+            shareButtonElem.style.cursor = 'no-drop';
         } else if (type == 6) { // API: incorrect parameters
-            discordBtn.innerHTML = `${btn_error}<span class="a-button-text">Something went wrong</span>`;
-            discordBtn.style.cursor = 'pointer';
+            shareButtonElem.innerHTML = `${btn_error}<span class="a-button-text">Something went wrong</span>`;
+            shareButtonElem.style.cursor = 'pointer';
         }
 
     }
@@ -488,16 +485,16 @@ NOTES:
     document.querySelectorAll('.a-button-primary.vvp-details-btn > .a-button-inner > input').forEach(function(element) {
         element.addEventListener('click', function() {
 
+            // Grabbing data from the catalog page
             parentAsin = this.getAttribute('data-asin');
             parentImage = this.parentElement.parentElement.parentElement.querySelector('img').src.match(PRODUCT_IMAGE_ID)[1];
             parentTitle = this.parentElement.parentElement.parentElement.querySelector('.vvp-item-product-title-container .a-truncate-full.a-offscreen').textContent.substring(0, PRODUCT_TITLE_LENGTH);
             queueType = urlData?.[2] || d_queueType(this.getAttribute('data-recommendation-type'));
 
-            // silencing console errors; a null error is inevitable with this arrangement; I might fix this in the future
-            try {
-                document.querySelector("button.a-button-discord").style.display = 'none'; // hiding the button until the modal content loads
-            } catch (error) {
+            if (shareButtonElem) {
+                shareButtonElem.style.display = 'none'; // hiding the button until the modal content loads
             }
+
         });
     });
 
@@ -516,14 +513,18 @@ NOTES:
         // Mutation observer fires every time the product title in the modal changes
         observer = new MutationObserver(function (mutations) {
 
+            // The button only gets added once the correct modal loads in, as observed in the mutation
             if (!document.querySelector('.a-button-discord')) {
                 addShareButton();
             }
 
-            document.querySelector("button.a-button-discord").style.display = 'inline-flex';
+            shareButtonElem = document.querySelector('.a-button-discord');
+
+            console.log(mutations);
+            shareButtonElem.style.display = 'inline-flex';
 
             // remove pre-existing event listener before creating a new one
-            document.querySelector("button.a-button-discord")?.removeEventListener("click", buttonHandler);
+            shareButtonElem?.removeEventListener("click", buttonHandler);
 
             // making sure there aren't any errors in the modal
             var hasError = !Array.from(errorMessages).every(function(elem) {
@@ -534,13 +535,13 @@ NOTES:
 
             if (hasError || queueType == null) {
                 // Hide the Share button
-                document.querySelector("button.a-button-discord").style.display = 'none';
+                shareButtonElem.style.display = 'none';
             } else if (wasPosted === queueType) {
                 // Product was already posted from the same queue before
                 setButtonState(4);
             } else if (!isModalHidden) {
                 setButtonState(0);
-                document.querySelector("button.a-button-discord").addEventListener("click", buttonHandler);
+                shareButtonElem.addEventListener("click", buttonHandler);
             }
 
         });
