@@ -1,13 +1,13 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      1.7.2
+// @version      1.8.0
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
 // @match        https://www.amazon.co.uk/vine/vine-items*
 // @match        https://www.amazon.ca/vine/vine-items*
-// @icon         https://www.google.com/s2/favicons?sz=64&domain=amazon.com
+// @icon         https://i.imgur.com/tIPo4Iy.png
 // @updateURL    https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
 // @downloadURL  https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js
 // @grant        GM_setValue
@@ -24,6 +24,9 @@ NOTES:
 
 (function() {
     'use strict';
+
+    const repoUrl = 'https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js';
+    const version = GM_info.script.version || "1.8.0";
 
     // Part of the migration process; will remove after a few months to ensure any remaining users have fully moved over
     try {
@@ -42,8 +45,11 @@ NOTES:
     }
 
     // initializing various localStorage items
+    (localStorage.getItem("VDP_VERSION_CHECK")) ? localStorage.getItem("VDP_VERSION_CHECK") : localStorage.setItem("VDP_VERSION_CHECK", 0);
     (JSON.parse(localStorage.getItem("VDP_HISTORY"))) ? JSON.parse(localStorage.getItem("VDP_HISTORY")) : localStorage.setItem("VDP_HISTORY", JSON.stringify({}));
     (localStorage.getItem("VDP_COOLDOWN")) ? localStorage.getItem("VDP_COOLDOWN") : localStorage.setItem("VDP_COOLDOWN", 0);
+
+    // If you're having issues with the browser not asking you for your token, you can set it manually here
     var API_TOKEN = localStorage.getItem("VDP_API_TOKEN");
 
     function addGlobalStyle(css) {
@@ -81,7 +87,7 @@ NOTES:
 
     const errorMessages = document.querySelectorAll('#vvp-product-details-error-alert, #vvp-out-of-inventory-error-alert'); // modals pertaining to error messages
 
-    // Removes old products if they've been in stored for 90+ days
+    // Removes old products that have been stored for 90+ days
     function purgeOldItems() {
         const items = JSON.parse(localStorage.getItem("VDP_HISTORY"));
         const date = new Date().getTime();
@@ -95,58 +101,61 @@ NOTES:
 
     purgeOldItems();
 
-    // Comment gets truncated by its lists, since the lengths of those are unknown, and we'll just say how many more there are at the end
-    function truncateString(originalString) {
-        var arr = originalString.split('\n');
-        var tooLong = true;
-        var variantsRemoved = {};
-        var variantQuantities = {};
-        var truncatedString = '';
-        var count = 0;
-
-        // Comparing the number of variants in each type to ensure only the one with the most gets truncated first
-        function compareItemLengths(y) {
-            for (let x=0; x<arr.length; x++) {
-                if (x !== y && variantQuantities[y] >= variantQuantities[x] ) {
-                    return true;
-                }
-            }
-        }
-
-        while (tooLong) {
-
-            if (count > 30) {
-                tooLong = false; // in the rare likelihood that this might loop forever
-            }
-
-            for (let x=0; x<arr.length; x++) {
-                var split = arr[x].split(' ● ');
-                var fullArrayLength = arr.join('').length;
-                if (split.length > 1 && !variantQuantities[x]) {
-                    variantQuantities[x] = split.length;
-                }
-
-                if (split.length > 1 && fullArrayLength > MAX_COMMENT_LENGTH && compareItemLengths(x)) {
-                    variantQuantities[x] = split.length - 1; // keep track of this index's array length
-                    variantsRemoved[x] = (variantsRemoved.hasOwnProperty(x)) ? variantsRemoved[x]+1 : 1; // used for tracking the number of variants that were truncated
-                    split.pop(); // removing the last variant from the array
-                    arr[x] = split.join(' ● ');
-                    arr[x] += `** ... +${variantsRemoved[x]} more**`;
-                } else if (fullArrayLength <= MAX_COMMENT_LENGTH) {
-                    break;
-                }
-            }
-
-            if (!(arr.join('\n').length > MAX_COMMENT_LENGTH)) {
-                // the string is finally short enough to be sent over the API
-                truncatedString = arr.join('\n');
-                tooLong = false;
-            }
-            count++;
-        }
-
-        return truncatedString.trim();
+    function extractVersion(html) {
+        const versionPattern = /\/\/ @version\s+([0-9.]+)/;
+        const match = html.match(versionPattern);
+        return match ? match[1] : null;
     }
+
+    // Comparing script versions
+    function compareVersions(localVersion, remoteVersion) {
+        const local = localVersion.split('.').map(Number);
+        const remote = remoteVersion.split('.').map(Number);
+
+        for (let i = 0; i < 3; i++) {
+            if (remote[i] > local[i]) {
+                return -1; // Remote version is newer
+            } else if (remote[i] < local[i]) {
+                return 1; // Local version is newer
+            }
+        }
+
+        return 0; // Versions are identical
+    }
+
+    // Checking the latest version of the script on GitHub
+    function checkForUpdates() {
+        const timeToWait = new Date().getTime() - 28800000;
+        console.log(timeToWait);
+        console.log(localStorage.getItem("VDP_VERSION_CHECK"));
+
+        if (localStorage.getItem("VDP_VERSION_CHECK") < timeToWait) { // will check every 8 hours for a new update
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', repoUrl, true);
+            xhr.onreadystatechange = function() {
+                if (xhr.readyState === 4 && xhr.status === 200) {
+                    const remoteVersion = extractVersion(xhr.responseText);
+                    if (remoteVersion) {
+                        const localVersion = version;
+                        const comparison = compareVersions(localVersion, remoteVersion);
+                        if (comparison < 0) {
+                            console.log('Your version: '+localVersion+' | Latest version: '+remoteVersion);
+                            alert('A new version of Vine Discord Poster is available!\nYour version: '+localVersion+' | Latest version: '+remoteVersion);
+                            window.open(repoUrl, '_blank');
+                        }
+                    } else {
+                        console.error('Unable to extract version from GitHub page.');
+                    }
+                } else if (xhr.readyState === 4) {
+                    console.error('Error fetching GitHub version. Status:', xhr.status);
+                }
+            };
+            xhr.send();
+            localStorage.setItem("VDP_VERSION_CHECK", new Date().getTime())
+        }
+    }
+
+    checkForUpdates();
 
     function verifyToken(token) {
         return new Promise((resolve, reject) => {
@@ -161,7 +170,6 @@ NOTES:
             xhr.open("GET", `https://api.llamastories.com/brenda/user/${token}`, true);
             xhr.setRequestHeader("Content-Type", "application/x-www-form-urlencoded");
             xhr.send();
-
         });
     }
 
@@ -243,7 +251,6 @@ NOTES:
         var comment = [];
         (productData.byLine) ? comment.push(`Brand: ${productData.byLine}`) : null;
         (productData.isLimited) ? comment.push("<:limited_ltd:1117538207362457611> Limited") : null;
-        (productData.variations) ? comment.push(variationFormatting(productData.variations)) : null;
 
         var notes = [];
         // different image urls
@@ -253,11 +260,6 @@ NOTES:
         (notes.length > 0) ? comment.push(noteFormatting(notes)) : null;
 
         comment = comment.join('\n');
-
-        // Apply comment truncation, if necessary
-        if (comment.length > MAX_COMMENT_LENGTH) {
-            comment = truncateString(comment);
-        }
 
         return comment;
     }
@@ -367,7 +369,7 @@ NOTES:
 
     }
 
-    // Offers more transparency regarding how long the rate limit of the API is
+    // Adds in the cooldown timer to offer more transparency regarding how long the rate limit of the API is
     function addButtonTimer(button) {
         var storedTimestamp = localStorage.getItem('VDP_COOLDOWN');
         var currentTimestamp = Date.now();
