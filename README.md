@@ -34,11 +34,11 @@ Browsers:
 * Edge ✅
 
 Platforms:
-* PC ✅
+* Desktop ✅
 * iOS ✅
 * Android ✅
 
-Extensions:
+Desktop Browser Extensions:
 * Tampermonkey
 * Violentmonkey
 * Greasemonkey (use Tampermonkey if you're experiencing issues with this one)
@@ -48,6 +48,10 @@ Extensions:
 **Q**: Can I use this for a different Discord server?
 
 **A**: Yes, but you'll likely need to make some modifications and possibly add your own code. If this is something you want to do, I would suggest forking this repository so you can keep your version up to date. You'd also need an API and a server to help manage the data that gets sent to your Discord server.
+
+**Q**: Why doesn't the button show up in search?
+
+**A**: Because search results just pull all items available to you based on your parameters and vomits them onto the page, with no way to distinguish which queue they were found in.
 
 **Q**: Could I get kicked out of Vine for using this?
 
