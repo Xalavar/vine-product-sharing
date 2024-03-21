@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      1.8.0
+// @version      2.0.0
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -26,31 +26,74 @@ NOTES:
     'use strict';
 
     const repoUrl = 'https://raw.githubusercontent.com/xalavar/vine-product-sharing/main/brenda-product-share.user.js';
-    const version = GM_info.script.version || "1.8.0";
+    const version = () => {
+        try {
+            return GM_info.script.version;
+        } catch(e) {
+            return "2.0.0";
+        }
+    }
+
+    (JSON.parse(localStorage.getItem("VDP_SETTINGS"))) ? JSON.parse(localStorage.getItem("VDP_SETTINGS")) : localStorage.setItem("VDP_SETTINGS", JSON.stringify({}));
 
     // Part of the migration process; will remove after a few months to ensure any remaining users have fully moved over
     try {
+        var localData = JSON.parse(localStorage.getItem("VDP_SETTINGS"));
+
         var gmData = GM_getValue("config");
         if (gmData) {
             localStorage.setItem("VDP_HISTORY", JSON.stringify(gmData));
             GM_deleteValue("config");
         }
-        var gmToken = GM_getValue("apiToken");
+
+        var gmToken = GM_getValue("apiToken") || localStorage.getItem("VDP_API_TOKEN");
         if (gmToken) {
-            localStorage.setItem("VDP_API_TOKEN", gmToken);
+            localData.apiToken = gmToken;
+            localStorage.removeItem("VDP_API_TOKEN");
             GM_deleteValue("apiToken");
         }
+
+        localStorage.removeItem("VDP_COOLDOWN");
+
+        localData.versionCheck = localStorage.getItem("VDP_VERSION_CHECK");
+        (!localData.cooldown) ? localData.cooldown = {'potluck': 0, 'other': 0} : null;
+        localStorage.removeItem("VDP_VERSION_CHECK");
+
+        localStorage.setItem("VDP_SETTINGS", JSON.stringify(localData));
+
+
     } catch(e) {
         console.log(e);
     }
 
-    // initializing various localStorage items
-    (localStorage.getItem("VDP_VERSION_CHECK")) ? localStorage.getItem("VDP_VERSION_CHECK") : localStorage.setItem("VDP_VERSION_CHECK", 0);
+    // For initializing various localStorage items
+    function getSettings() {
+        return JSON.parse(localStorage.getItem("VDP_SETTINGS"));
+    }
+
+    function saveSettings(name, value) {
+        var settings = JSON.parse(localStorage.getItem("VDP_SETTINGS"));
+
+        const keys = name.split('.');
+        let current = settings;
+
+        for (let i = 0; i < keys.length - 1; i++) {
+            if (!current[keys[i]]) {
+                current[keys[i]] = {};
+            }
+            current = current[keys[i]];
+        }
+
+        current[keys[keys.length - 1]] = value;
+
+        localStorage.setItem("VDP_SETTINGS", JSON.stringify(settings));
+    }
+
+    (!getSettings().cooldown) ? saveSettings('cooldown', {'potluck': 0, 'other': 0}) : null;
     (JSON.parse(localStorage.getItem("VDP_HISTORY"))) ? JSON.parse(localStorage.getItem("VDP_HISTORY")) : localStorage.setItem("VDP_HISTORY", JSON.stringify({}));
-    (localStorage.getItem("VDP_COOLDOWN")) ? localStorage.getItem("VDP_COOLDOWN") : localStorage.setItem("VDP_COOLDOWN", 0);
 
     // If you're having issues with the browser not asking you for your token, you can set it manually here
-    var API_TOKEN = localStorage.getItem("VDP_API_TOKEN");
+    var API_TOKEN = getSettings().apiToken;
 
     function addGlobalStyle(css) {
         var head, style;
@@ -71,7 +114,7 @@ NOTES:
     const urlData = window.location.href.match(/(?!.*search)(amazon\..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
     const MAX_COMMENT_LENGTH = 900;
     const ITEM_EXPIRY = 7776000000; // 90 days in ms
-    const API_RATE_LIMIT = 10000;
+    const API_RATE_LIMIT = (urlData?.[2] === "potluck") ? 1800000 : 30000; // 30 minutes for RFY | 30 seconds for AFA/AI
     const PRODUCT_IMAGE_ID = /.+\/(.*)\._SS[0-9]+_\.[a-z]{3,4}$/;
     const PRODUCT_TITLE_LENGTH = 47; // should match the length of the product title that is anticipated to show up on the embed
 
@@ -89,13 +132,15 @@ NOTES:
 
     // Removes old products that have been stored for 90+ days
     function purgeOldItems() {
-        const items = JSON.parse(localStorage.getItem("VDP_HISTORY"));
-        const date = new Date().getTime();
+        var items = JSON.parse(localStorage.getItem("VDP_HISTORY"))
+        if (items.history) {
+            const date = new Date().getTime();
 
-        for (const obj in items) {
-            ((date - items[obj].date) >= ITEM_EXPIRY) ? delete items[obj] : null;
+            for (const obj in items.history) {
+                ((date - items[obj].date) >= ITEM_EXPIRY) ? delete items[obj] : null;
+            }
+            localStorage.setItem("VDP_HISTORY", JSON.stringify(items));
         }
-        localStorage.setItem("VDP_HISTORY", JSON.stringify(items));
 
     }
 
@@ -126,32 +171,30 @@ NOTES:
     // Checking the latest version of the script on GitHub
     function checkForUpdates() {
         const timeToWait = new Date().getTime() - 28800000;
-        console.log(timeToWait);
-        console.log(localStorage.getItem("VDP_VERSION_CHECK"));
 
-        if (localStorage.getItem("VDP_VERSION_CHECK") < timeToWait) { // will check every 8 hours for a new update
+        if (getSettings().versionCheck < timeToWait) { // will check every 8 hours for a new update
             const xhr = new XMLHttpRequest();
             xhr.open('GET', repoUrl, true);
             xhr.onreadystatechange = function() {
                 if (xhr.readyState === 4 && xhr.status === 200) {
                     const remoteVersion = extractVersion(xhr.responseText);
                     if (remoteVersion) {
-                        const localVersion = version;
+                        const localVersion = version();
                         const comparison = compareVersions(localVersion, remoteVersion);
                         if (comparison < 0) {
-                            console.log('Your version: '+localVersion+' | Latest version: '+remoteVersion);
+                            console.log('VDP - Your version: '+localVersion+' | Latest version: '+remoteVersion);
                             alert('A new version of Vine Discord Poster is available!\nYour version: '+localVersion+' | Latest version: '+remoteVersion);
                             window.open(repoUrl, '_blank');
                         }
                     } else {
-                        console.error('Unable to extract version from GitHub page.');
+                        console.error('Unable to extract VDP version from GitHub page.');
                     }
                 } else if (xhr.readyState === 4) {
-                    console.error('Error fetching GitHub version. Status:', xhr.status);
+                    console.error('Error fetching VDP version. Status:', xhr.status);
                 }
             };
             xhr.send();
-            localStorage.setItem("VDP_VERSION_CHECK", new Date().getTime())
+            saveSettings('versionCheck', new Date().getTime());
         }
     }
 
@@ -182,7 +225,7 @@ NOTES:
                     var response = await verifyToken(userInput);
                     if (response && response.status === 200) {
                         // Save token after validation
-                        localStorage.setItem("VDP_API_TOKEN", userInput);
+                        saveSettings('apiToken', userInput);
                         resolve(userInput);
                     } else if (response && response.status === 404) {
                         alert("API token is invalid!");
@@ -206,23 +249,27 @@ NOTES:
         var variations = {};
 
         document.querySelectorAll(`#vvp-product-details-modal--variations-container .vvp-variation-dropdown`).forEach(function(elem) {
-
             const type = elem.querySelector('h5').innerText;
             const names = Array.from(elem.querySelectorAll('.a-dropdown-container select option')).map(function(option) {
                 return option.innerText.replace(/[*_~|`]/g, '\\$&'); // cancelling out any potential characters that would affect Discord formatting
             });
             variations[type] = names;
         });
-        return variations;
-    }
 
-    function variationFormatting(variations) {
-        var str = (Object.keys(variations).length > 1) ? '<:dropdown_options:1117467480860922018> Dropdowns' : '<:dropdown_options:1117467480860922018> Dropdown';
-        for (const type in variations) {
-            const t = (variations[type].length > 1) ? `\n**${type.replace(/(y$)/, 'ie')}s (${variations[type].length}):** ` : `\n**${type}:** `; // plural, if multiple
-            str += t + variations[type].join(' ● ');
+        // begin filtering variations into: colors, sizes, options
+        var filteredVariations = {};
+        for (const name in variations) {
+            const matchedType = name.match(/(color|colour)?(size)?(^.+)?/i);
+            if (matchedType[1]) {
+                filteredVariations.colors = variations[name];
+            } else if (matchedType[2]) {
+                filteredVariations.sizes = variations[name];
+            } else if (matchedType[3]) {
+                filteredVariations.options = variations[name];
+            }
         }
-        return str;
+
+        return filteredVariations;
     }
 
     function noteFormatting(notes) {
@@ -275,13 +322,14 @@ NOTES:
 
         var variations = returnVariations();
         productData.variations = (Object.keys(variations).length > 0) ? variations : null;
-        productData.isLimited = (document.querySelector('#vvp-product-details-modal--limited-quantity').style.display !== 'none') ? true : false;
+        productData.isLimited = (document.querySelector('#vvp-product-details-modal--limited-quantity').style.display !== 'none') ? 1 : 0;
         productData.asin = parentAsin;
         productData.differentChild = (parentAsin !== childAsin) ? true : false; // comparing the asin loaded in the modal to the one on the webpage
         productData.differentImages = (parentImage !== childImage.src?.match(PRODUCT_IMAGE_ID)[1]) ? true : false;
         productData.etv = document.querySelector("#vvp-product-details-modal--tax-value-string")?.innerText.replace("$", "");
         productData.queue = queueType;
         productData.byLine = (!parentTitle.includes(productByLine)) ? productByLine : null;
+
         // possibly more things to come...
 
         // Compile everything miscellaneous into a comment string
@@ -300,7 +348,7 @@ NOTES:
                 listOfItems[productData.asin].date = new Date().getTime();
                 localStorage.setItem("VDP_HISTORY", JSON.stringify(listOfItems));
                 setButtonState(2);
-                localStorage.setItem("VDP_COOLDOWN", listOfItems[productData.asin].date);
+                (urlData?.[2] === "potluck") ? saveSettings('cooldown.potluck', listOfItems[productData.asin].date) : saveSettings('cooldown.other', listOfItems[productData.asin].date);
             } else if (response.status == 400 || response.status == 401) { // invalid token
                 setButtonState(5);
                 // Will prompt the user to enter a valid token
@@ -371,7 +419,7 @@ NOTES:
 
     // Adds in the cooldown timer to offer more transparency regarding how long the rate limit of the API is
     function addButtonTimer(button) {
-        var storedTimestamp = localStorage.getItem('VDP_COOLDOWN');
+        var storedTimestamp = (urlData?.[2] === "potluck") ? getSettings().cooldown.potluck : getSettings().cooldown.other;
         var currentTimestamp = Date.now();
         var timeDifference = currentTimestamp - storedTimestamp;
         var remainingTime = API_RATE_LIMIT - timeDifference;
@@ -380,10 +428,18 @@ NOTES:
         if (remainingTime <= 0) {
             setButtonState(0);
         } else {
-            button.innerHTML = `${btn_warning}<span class="a-button-text">Cooldown (${Math.floor(remainingTime / 1000)}s)</span>`;
+            var min = Math.floor(remainingTime / 60000); // minutes
+            var sec = Math.floor((remainingTime % 60000) / 1000); // seconds
+
+            if (remainingTime > 60000) {
+                button.innerHTML = `${btn_warning}<span class="a-button-text">Cooldown (${min}m ${sec}s)</span>`;
+            } else {
+                button.innerHTML = `${btn_warning}<span class="a-button-text">Cooldown (${sec}s)</span>`;
+            }
+
             button.style.cursor = 'no-drop';
             button.disabled = true;
-            duration = (remainingTime < 1000) ? remainingTime : duration; // having the duration match the remaining time makes it more precise
+            duration = (remainingTime < 1000) ? remainingTime : duration; // Having the duration match the remaining time makes it more precise
             setTimeout(function() {
                 addButtonTimer(button);
             }, duration);
@@ -392,8 +448,9 @@ NOTES:
     }
 
     function setButtonState(type) {
+        const timestamp = (urlData?.[2] === "potluck") ? getSettings().cooldown.potluck : getSettings().cooldown.other;
         var cooldownTimer = () => {
-            var timeDiff = Date.now() - localStorage.getItem('VDP_COOLDOWN');
+            var timeDiff = Date.now() - timestamp;
             if (timeDiff < API_RATE_LIMIT) {
                 return timeDiff;
             }
@@ -439,15 +496,23 @@ NOTES:
 
     function sendDataToAPI(data) {
 
-        const formData = new URLSearchParams({
-            version: 1,
+        var formData = new URLSearchParams({
+            version: 2,
             token: API_TOKEN,
             domain: urlData[1],
             tab: data.queue,
             asin: data.asin,
             etv: data.etv,
             comment: data.comments,
+            limited: data.isLimited
         });
+
+        // Appending the arrays of colors, sizes, and options
+        for (const variant in data.variations) {
+            data.variations[variant].forEach(option => {
+                formData.append(variant+'[]', option);
+            });
+        }
 
         setButtonState(1);
 
