@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      2.0.0
+// @version      2.0.1
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -30,7 +30,7 @@ NOTES:
         try {
             return GM_info.script.version;
         } catch(e) {
-            return "2.0.0";
+            return "2.0.1";
         }
     }
 
@@ -114,7 +114,7 @@ NOTES:
     const urlData = window.location.href.match(/(?!.*search)(amazon\..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
     const MAX_COMMENT_LENGTH = 900;
     const ITEM_EXPIRY = 7776000000; // 90 days in ms
-    const API_RATE_LIMIT = (urlData?.[2] === "potluck") ? 1800000 : 30000; // 30 minutes for RFY | 30 seconds for AFA/AI
+    const API_RATE_LIMIT = 10000; // 10 second API rate limit
     const PRODUCT_IMAGE_ID = /.+\/(.*)\._SS[0-9]+_\.[a-z]{3,4}$/;
     const PRODUCT_TITLE_LENGTH = 47; // should match the length of the product title that is anticipated to show up on the embed
 
