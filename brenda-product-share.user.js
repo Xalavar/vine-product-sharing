@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      2.0.1
+// @version      2.1.0
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -30,7 +30,7 @@ NOTES:
         try {
             return GM_info.script.version;
         } catch(e) {
-            return "2.0.1";
+            return "2.1.0";
         }
     }
 
@@ -546,7 +546,7 @@ NOTES:
 
     }
 
-    let parentAsin, parentImage, parentTitle, queueType;
+    let parentAsin, parentImage, parentTitle, queueType, recommendationId;
 
     // As much as I hate this, this adds event listeners to all of the "See details" buttons
     document.querySelectorAll('.a-button-primary.vvp-details-btn > .a-button-inner > input').forEach(function(element) {
@@ -554,9 +554,19 @@ NOTES:
 
             // Grabbing data from the catalog page
             parentAsin = this.getAttribute('data-asin');
+            recommendationId = this.getAttribute('data-recommendation-id');
             parentImage = this.parentElement.parentElement.parentElement.querySelector('img').src.match(PRODUCT_IMAGE_ID)[1];
             parentTitle = this.parentElement.parentElement.parentElement.querySelector('.vvp-item-product-title-container .a-truncate-full.a-offscreen').textContent.substring(0, PRODUCT_TITLE_LENGTH);
             queueType = urlData?.[2] || d_queueType(this.getAttribute('data-recommendation-type'));
+
+            if (queueType == null) {
+                const type = recommendationId.split('#').length - 1;
+                if (type == 3) {
+                    queueType = "potluck";
+                } else if (type == 2) {
+                    queueType = "encore";
+                }
+            }
 
             if (shareButtonElem) {
                 shareButtonElem.style.display = 'none'; // hiding the button until the modal content loads
@@ -587,7 +597,7 @@ NOTES:
 
             shareButtonElem = document.querySelector('.a-button-discord');
 
-            console.log(mutations);
+            //console.log(mutations);
             shareButtonElem.style.display = 'inline-flex';
 
             // remove pre-existing event listener before creating a new one
