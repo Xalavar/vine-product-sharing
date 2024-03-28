@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      2.1.1
+// @version      2.1.2
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -30,7 +30,7 @@ NOTES:
         try {
             return GM_info.script.version;
         } catch(e) {
-            return "2.1.1";
+            return "2.1.2";
         }
     }
 
@@ -559,7 +559,7 @@ NOTES:
             parentTitle = this.parentElement.parentElement.parentElement.querySelector('.vvp-item-product-title-container .a-truncate-full.a-offscreen').textContent.substring(0, PRODUCT_TITLE_LENGTH);
             queueType = urlData?.[2] || d_queueType(this.getAttribute('data-recommendation-type'));
 
-            if (queueType == null) {
+            if (queueType == null || window.location.href.match(/[?&]search=/)) {
                 const type = recommendationId.split('#').length - 1;
                 if (type == 3) {
                     queueType = "potluck";
