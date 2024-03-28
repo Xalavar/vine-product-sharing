@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      2.1.0
+// @version      2.1.1
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -30,7 +30,7 @@ NOTES:
         try {
             return GM_info.script.version;
         } catch(e) {
-            return "2.1.0";
+            return "2.1.1";
         }
     }
 
@@ -111,7 +111,7 @@ NOTES:
     addGlobalStyle(`.a-button-discord-icon { background-image: url(https://m.media-amazon.com/images/S/sash/Gt1fHP07TsoILq3.png); content: ""; padding: 10px 10px 10px 10px; background-size: 512px 512px; background-repeat: no-repeat; margin-left: 10px; vertical-align: middle; }`);
     addGlobalStyle(`.a-button-discord.mobile-vertical { margin-top: 7px; margin-left: 0px; }`);
 
-    const urlData = window.location.href.match(/(?!.*search)(amazon\..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
+    const urlData = window.location.href.match(/(amazon\..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
     const MAX_COMMENT_LENGTH = 900;
     const ITEM_EXPIRY = 7776000000; // 90 days in ms
     const API_RATE_LIMIT = 10000; // 10 second API rate limit
