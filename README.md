@@ -57,9 +57,9 @@ Desktop Browser Extensions:
 
 **A**: No. This is 100% safe to use and won't trip up Amazon's bot detection because it's only reading information on the page and not interacting with Amazon's servers in any way. 
 
-**Q**: How do I get invited to Vi—
+**Q**: How do I get invited to Vine?
 
-**A**: No.
+**A**: [Here's how.](https://www.youtube.com/watch?v=dQw4w9WgXcQ)
 
 # Credits
 
