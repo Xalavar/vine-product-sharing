@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      2.1.2
+// @version      2.1.3
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -36,7 +36,7 @@ NOTES:
 
     (JSON.parse(localStorage.getItem("VDP_SETTINGS"))) ? JSON.parse(localStorage.getItem("VDP_SETTINGS")) : localStorage.setItem("VDP_SETTINGS", JSON.stringify({}));
 
-    // Part of the migration process; will remove after a few months to ensure any remaining users have fully moved over
+    // Part of the old migration process; will remove after a few months to ensure any remaining users have fully moved over
     try {
         var localData = JSON.parse(localStorage.getItem("VDP_SETTINGS"));
 
@@ -256,7 +256,7 @@ NOTES:
             variations[type] = names;
         });
 
-        // begin filtering variations into: colors, sizes, options
+        // Begin filtering variations into: colors, sizes, options
         var filteredVariations = {};
         for (const name in variations) {
             const matchedType = name.match(/(color|colour)?(size)?(^.+)?/i);
@@ -297,11 +297,10 @@ NOTES:
 
         var comment = [];
         (productData.byLine) ? comment.push(`Brand: ${productData.byLine}`) : null;
-        (productData.isLimited) ? comment.push("<:limited_ltd:1117538207362457611> Limited") : null;
 
         var notes = [];
         // different image urls
-        (productData.differentImages && hasNoSiblings) ? notes.push("Parent product photo might not reflect available child variant.") : null;
+        //(productData.differentImages && hasNoSiblings) ? notes.push("Parent product photo might not reflect available child variant.") : null;
 
         notes = notes.filter(value => value !== null);
         (notes.length > 0) ? comment.push(noteFormatting(notes)) : null;
@@ -340,7 +339,7 @@ NOTES:
         var listOfItems = JSON.parse(localStorage.getItem("VDP_HISTORY"));
 
         if (response) {
-            // deal with the API response
+            // Handle API response
             if (response.status == 200) { // successfully posted to Discord
                 listOfItems[productData.asin] = {};
                 listOfItems[productData.asin].status = 'Posted';
@@ -457,7 +456,7 @@ NOTES:
             return false;
         }
 
-        // reset the button
+        // Reset the button
         shareButtonElem.disabled = false;
         shareButtonElem.classList.remove('a-button-disabled');
 
@@ -555,8 +554,12 @@ NOTES:
             // Grabbing data from the catalog page
             parentAsin = this.getAttribute('data-asin');
             recommendationId = this.getAttribute('data-recommendation-id');
-            parentImage = this.parentElement.parentElement.parentElement.querySelector('img').src.match(PRODUCT_IMAGE_ID)[1];
-            parentTitle = this.parentElement.parentElement.parentElement.querySelector('.vvp-item-product-title-container .a-truncate-full.a-offscreen').textContent.substring(0, PRODUCT_TITLE_LENGTH);
+
+            var tileHead = this.closest('.vvp-item-tile-content');
+
+            console.log(tileHead)
+            parentImage = tileHead.querySelector('img').src.match(PRODUCT_IMAGE_ID)[1];
+            parentTitle = tileHead.querySelector('.vvp-item-product-title-container .a-truncate-full.a-offscreen').textContent.substring(0, PRODUCT_TITLE_LENGTH);
             queueType = urlData?.[2] || d_queueType(this.getAttribute('data-recommendation-type'));
 
             if (queueType == null || window.location.href.match(/[?&]search=/)) {
