@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         Vine Discord Poster
 // @namespace    https://github.com/Xalavar
-// @version      2.1.3
+// @version      2.1.4
 // @description  A tool to make posting to Discord easier
 // @author       lelouch_di_britannia (Discord)
 // @match        https://www.amazon.com/vine/vine-items*
@@ -30,7 +30,7 @@ NOTES:
         try {
             return GM_info.script.version;
         } catch(e) {
-            return "2.1.3";
+            return "2.1.4";
         }
     }
 
@@ -114,7 +114,7 @@ NOTES:
     const urlData = window.location.href.match(/(amazon\..+)\/vine\/vine-items(?:\?queue=)?(encore|last_chance|potluck)?.*$/); // Country and queue type are extrapolated from this
     const MAX_COMMENT_LENGTH = 900;
     const ITEM_EXPIRY = 7776000000; // 90 days in ms
-    const API_RATE_LIMIT = 10000; // 10 second API rate limit
+    const API_RATE_LIMIT = 10000; // 10-second API rate-limit
     const PRODUCT_IMAGE_ID = /.+\/(.*)\._SS[0-9]+_\.[a-z]{3,4}$/;
     const PRODUCT_TITLE_LENGTH = 47; // should match the length of the product title that is anticipated to show up on the embed
 
@@ -389,9 +389,10 @@ NOTES:
     function getCorrectModal() {
         var btnHeaders = document.querySelectorAll('.vvp-modal-footer');
         var filteredHeaders = Array.from(btnHeaders).map(function (modal) {
-            var productDetailsHeader = modal.parentElement.parentElement.querySelector('.a-popover-header > .a-popover-header-content');
+            const modalWrapper = modal.closest('.a-popover-wrapper');
+            const productDetailsHeader = modalWrapper.querySelector('.a-popover-header > .a-popover-header-content');
             if (productDetailsHeader && productDetailsHeader.innerText.trim() === 'Product Details') {
-                return [modal, modal.parentElement.parentElement];
+                return [modal, modalWrapper];
             }
             return null;
         });
@@ -427,15 +428,11 @@ NOTES:
         if (remainingTime <= 0) {
             setButtonState(0);
         } else {
-            var min = Math.floor(remainingTime / 60000); // minutes
-            var sec = Math.floor((remainingTime % 60000) / 1000); // seconds
+            const min = Math.floor(remainingTime / 60000); // minutes
+            const sec = Math.floor((remainingTime % 60000) / 1000); // seconds
+            const timer = (remainingTime > 60000) ? `${min}m ${sec}s` : `${sec}s`;
 
-            if (remainingTime > 60000) {
-                button.innerHTML = `${btn_warning}<span class="a-button-text">Cooldown (${min}m ${sec}s)</span>`;
-            } else {
-                button.innerHTML = `${btn_warning}<span class="a-button-text">Cooldown (${sec}s)</span>`;
-            }
-
+            button.innerHTML = `${btn_warning}<span class="a-button-text">Cooldown (${timer})</span>`;
             button.style.cursor = 'no-drop';
             button.disabled = true;
             duration = (remainingTime < 1000) ? remainingTime : duration; // Having the duration match the remaining time makes it more precise
@@ -448,50 +445,81 @@ NOTES:
 
     function setButtonState(type) {
         const timestamp = (urlData?.[2] === "potluck") ? getSettings().cooldown.potluck : getSettings().cooldown.other;
-        var cooldownTimer = () => {
-            var timeDiff = Date.now() - timestamp;
-            if (timeDiff < API_RATE_LIMIT) {
-                return timeDiff;
-            }
-            return false;
-        }
+        const cooldownTimer = () => {
+            const timeDiff = Date.now() - timestamp;
+            return (timeDiff < API_RATE_LIMIT) ? timeDiff : false;
+        };
 
         // Reset the button
         shareButtonElem.disabled = false;
         shareButtonElem.classList.remove('a-button-disabled');
 
-        if (type == 0 && cooldownTimer()) { // default
-            addButtonTimer(shareButtonElem);
-        } else if (type == 0) {
-            shareButtonElem.innerHTML = `${btn_discordSvg}<span class="a-button-text">Share on Discord</span>`;
-            shareButtonElem.style.cursor = 'pointer';
-        } else if (type == 1) { // submit button is clicked and waiting for API result
-            shareButtonElem.innerHTML = `${btn_loadingAnim}<span class="a-button-text">Submitting...</span>`;
-            shareButtonElem.disabled = true;
-            shareButtonElem.style.cursor = 'no-drop';
-        } else if (type == 2) { // API: success
-            shareButtonElem.innerHTML = `${btn_checkmark}<span class="a-button-text">Done!</span>`;
-            shareButtonElem.disabled = true;
-            shareButtonElem.classList.add('a-button-disabled');
-        } else if (type == 3) { // API: posting too quickly
-            shareButtonElem.innerHTML = `${btn_warning}<span class="a-button-text">Sharing too quickly!</span>`;
-            shareButtonElem.style.cursor = 'pointer';
-        } else if (type == 4) { // Item was already posted to Discord
-            shareButtonElem.innerHTML = `${btn_info}<span class="a-button-text">Already posted</span>`;
-            shareButtonElem.disabled = true;
-            shareButtonElem.classList.add('a-button-disabled');
-            shareButtonElem.style.cursor = 'no-drop';
-        } else if (type == 5) { // API: invalid token
-            shareButtonElem.innerHTML = `${btn_error}<span class="a-button-text">Invalid token</span>`;
-            shareButtonElem.disabled = true;
-            shareButtonElem.classList.add('a-button-disabled');
-            shareButtonElem.style.cursor = 'no-drop';
-        } else if (type == 6) { // API: incorrect parameters
-            shareButtonElem.innerHTML = `${btn_error}<span class="a-button-text">Something went wrong</span>`;
-            shareButtonElem.style.cursor = 'pointer';
+        // Default state (on cooldown)
+        if (type === 0 && cooldownTimer()) {
+            return addButtonTimer(shareButtonElem);
         }
 
+        // Button states
+        const states = {
+            0: { // Default button state (not on cooldown)
+                icon: btn_discordSvg,
+                text: "Share on Discord",
+                disabled: false,
+                cursor: "pointer"
+            },
+            1: { // submit button is clicked and waiting for API result
+                icon: btn_loadingAnim,
+                text: "Submitting...",
+                disabled: true,
+                cursor: "no-drop"
+            },
+            2: { // API: success
+                icon: btn_checkmark,
+                text: "Done!",
+                disabled: true,
+                cursor: "no-drop",
+                addClass: true
+            },
+            3: { // API: posting too quickly
+                icon: btn_warning,
+                text: "Sharing too quickly!",
+                disabled: false,
+                cursor: "pointer"
+            },
+            4: { // Item was already posted to Discord
+                icon: btn_info,
+                text: "Already posted",
+                disabled: true,
+                cursor: "no-drop",
+                addClass: true
+            },
+            5: { // API: invalid token
+                icon: btn_error,
+                text: "Invalid token",
+                disabled: true,
+                cursor: "no-drop",
+                addClass: true
+            },
+            6: { // API: incorrect parameters
+                icon: btn_error,
+                text: "Something went wrong",
+                disabled: false,
+                cursor: "pointer"
+            }
+        };
+
+        const state = states[type];
+        if (!state) return; // do nothing if unknown state
+
+        shareButtonElem.innerHTML = `${state.icon}<span class="a-button-text">${state.text}</span>`;
+        shareButtonElem.disabled = state.disabled;
+        shareButtonElem.style.cursor = state.cursor;
+
+        if (state.addClass) {
+            shareButtonElem.classList.add('a-button-disabled');
+        }
     }
+
 
     function sendDataToAPI(data) {
 
