@@ -30,7 +30,7 @@ NOTES:
         try {
             return GM_info.script.version;
         } catch(e) {
-            return "2.1.2";
+            return "2.1.3";
         }
     }
 
